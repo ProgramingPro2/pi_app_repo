@@ -16,7 +16,7 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 
 @dataclasses.dataclass
 class ConfigData:
-    camera_type: str = "seekpro"
+    camera_type: str = "seek"  # Default to CompactXR
     palette_index: int = 2
     threshold_c: float = 30.0
     threshold_mode: str = ">"

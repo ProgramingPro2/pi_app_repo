@@ -14,7 +14,7 @@ import numpy as np
 from PIL import Image
 
 from . import buttons
-from .camera import SeekCamera, SeekCameraError, SyntheticCamera
+from .camera import SeekCamera, SeekCameraError, SyntheticCamera, autodetect_camera_type
 from .display import NullDisplay, Waveshare24Display
 from .modes import ModeHooks, ModeManager
 from .overlays import BannerQueue, format_status
@@ -29,7 +29,7 @@ from .processing import (
 
 @dataclass
 class AppOptions:
-    camera_type: str = "seekpro"
+    camera_type: str = "seek"  # Default to CompactXR
     ffc_path: Optional[str] = None
     use_synthetic: bool = False
     palette_index: int = 2
@@ -43,7 +43,21 @@ class ThermalApp:
     def __init__(self, options: AppOptions, button_controller: Optional[buttons.ButtonController] = None) -> None:
         self.options = options
         self.config = load_config()
-        self.options.camera_type = self.config.camera_type or self.options.camera_type
+        
+        # Autodetect camera type on bootup, defaulting to CompactXR ("seek")
+        if not self.options.use_synthetic:
+            try:
+                detected_type = autodetect_camera_type(default="seek")
+                self.options.camera_type = detected_type
+                # Update config if detection succeeded and differs from stored value
+                if detected_type != self.config.camera_type:
+                    self.config.camera_type = detected_type
+            except Exception:
+                # Fall back to config or default if autodetection fails
+                self.options.camera_type = self.config.camera_type or self.options.camera_type
+        else:
+            self.options.camera_type = self.config.camera_type or self.options.camera_type
+        
         self.options.palette_index = self.config.palette_index
         if self.config.ffc_path:
             self.options.ffc_path = self.config.ffc_path

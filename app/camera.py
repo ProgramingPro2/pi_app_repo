@@ -16,6 +16,40 @@ class SeekCameraError(RuntimeError):
     """Raised when the camera wrapper encounters an unrecoverable error."""
 
 
+def autodetect_camera_type(shim_path: Optional[str] = None, default: str = "seek") -> str:
+    """
+    Attempt to detect which Seek camera type is connected.
+    
+    Tries camera types in order: CompactXR (seek), then CompactPRO (seekpro).
+    Returns the first type that successfully opens, or the default if none work.
+    
+    Parameters
+    ----------
+    shim_path:
+        Optional path to libseekshim.so for testing.
+    default:
+        Camera type to return if autodetection fails (default: "seek" for CompactXR).
+    
+    Returns
+    -------
+    str
+        Detected camera type: "seek" for CompactXR or "seekpro" for CompactPRO.
+    """
+    # Try CompactXR first (default), then CompactPRO
+    candidates = ["seek", "seekpro"]
+    
+    for camera_type in candidates:
+        try:
+            cam = SeekCamera(camera_type=camera_type, shim_path=shim_path)
+            cam.close()
+            return camera_type
+        except (SeekCameraError, ValueError, OSError):
+            continue
+    
+    # If none detected, return default (CompactXR)
+    return default
+
+
 class SeekCamera:
     """
     Thin wrapper around the native `seekshim` shared library.
@@ -41,7 +75,7 @@ class SeekCamera:
 
     def __init__(
         self,
-        camera_type: str = "seekpro",
+        camera_type: str = "seek",  # Default to CompactXR
         ffc_path: Optional[str] = None,
         shim_path: Optional[str] = None,
     ) -> None:
