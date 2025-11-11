@@ -1,0 +1,17 @@
+[Unit]
+Description=Seek Thermal Waveshare Viewer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/libseek-thermal
+Environment=LD_LIBRARY_PATH=/home/pi/libseek-thermal/pi_app/native/build
+ExecStart=/home/pi/libseek-thermal/.venv/bin/python -m pi_app.app.app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
