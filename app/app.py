@@ -232,7 +232,6 @@ class ThermalApp:
                         test_image = Image.new('RGB', (240, 320), color=(255, 0, 0))  # Red screen
                         try:
                             self.display.show(test_image)
-                            import asyncio
                             await asyncio.sleep(0.5)  # Show red for 0.5 seconds
                             test_image = Image.new('RGB', (240, 320), color=(0, 255, 0))  # Green screen
                             self.display.show(test_image)
