@@ -39,12 +39,17 @@ class ButtonController:
             return
 
         for key, spec in self.specs.items():
-            btn = Button(spec.pin, pull_up=True, bounce_time=0.05)
-            btn.when_pressed = spec.on_press
-            if spec.hold_time and spec.hold_action:
-                btn.hold_time = spec.hold_time
-                btn.when_held = spec.hold_action
-            self._buttons[key] = btn
+            try:
+                btn = Button(spec.pin, pull_up=True, bounce_time=0.05)
+                btn.when_pressed = spec.on_press
+                if spec.hold_time and spec.hold_action:
+                    btn.hold_time = spec.hold_time
+                    btn.when_held = spec.hold_action
+                self._buttons[key] = btn
+            except (OSError, FileNotFoundError, KeyError, RuntimeError):
+                # GPIO not available (e.g., running on non-Pi system)
+                # Silently skip button setup - application can run without buttons
+                pass
 
     def close(self) -> None:
         for btn in self._buttons.values():
