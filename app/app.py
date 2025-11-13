@@ -92,6 +92,17 @@ class ThermalApp:
 
         self.camera = self._init_camera()
         self.display = self._init_display()
+        
+        # Debug: Print display type
+        display_type = type(self.display).__name__
+        print(f"Using display type: {display_type}")
+        if isinstance(self.display, NullDisplay):
+            print("WARNING: Using NullDisplay - no actual display output will occur!")
+            print("If you have a Waveshare display connected, check:")
+            print("  1. SPI is enabled: sudo raspi-config nonint do_spi 0")
+            print("  2. luma.lcd is installed: pip install luma.lcd")
+            print("  3. Display wiring is correct")
+            print("  4. AppOptions.lcd is set to 'waveshare'")
 
     def _init_camera(self):
         if self.options.use_synthetic:
@@ -106,9 +117,16 @@ class ThermalApp:
     def _init_display(self):
         if self.options.lcd == "waveshare":
             try:
-                return Waveshare24Display(rotate=self.options.display_rotate)
-            except Exception:
+                display = Waveshare24Display(rotate=self.options.display_rotate)
+                print("Display initialized successfully: Waveshare24Display")
+                return display
+            except Exception as e:
+                print(f"Failed to initialize Waveshare display: {e}")
+                print("Falling back to NullDisplay (no-op)")
+                import traceback
+                traceback.print_exc()
                 return NullDisplay()
+        print("Using NullDisplay (lcd option not set to 'waveshare')")
         return NullDisplay()
 
     def _build_default_buttons(self) -> Optional[buttons.ButtonController]:
@@ -180,7 +198,12 @@ class ThermalApp:
                     highlight_color=mode_result.highlight_color,
                 )
                 image = self._resize_for_display(image)
-                self.display.show(image)
+                try:
+                    self.display.show(image)
+                except Exception as e:
+                    print(f"Error displaying image: {e}")
+                    import traceback
+                    traceback.print_exc()
 
                 if mode_result.banner:
                     self.banner_queue.push(mode_result.banner)

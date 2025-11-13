@@ -27,9 +27,14 @@ class NullDisplay:
 
     def __init__(self) -> None:
         self.last_frame: Optional[Image.Image] = None
+        self._frame_count = 0
 
     def show(self, image: Image.Image) -> None:
         self.last_frame = image.copy()
+        self._frame_count += 1
+        # Print every 30 frames to avoid spam
+        if self._frame_count % 30 == 0:
+            print(f"NullDisplay: Frame {self._frame_count} (no actual display output)")
 
     def cleanup(self) -> None:
         self.last_frame = None
@@ -54,14 +59,26 @@ class Waveshare24Display:
         if spi is None or st7789 is None:
             raise DisplayError("luma.lcd is not installed; cannot drive Waveshare display.")
 
-        serial = spi(
-            port=spi_port,
-            device=spi_device,
-            gpio_DC=gpio_dc,
-            gpio_RST=gpio_rst,
-            bus_speed_hz=62_500_000,
-        )
-        self._device = st7789(serial_interface=serial, width=width, height=height, rotate=rotate)
+        print(f"Initializing SPI display: port={spi_port}, device={spi_device}, DC={gpio_dc}, RST={gpio_rst}")
+        try:
+            serial = spi(
+                port=spi_port,
+                device=spi_device,
+                gpio_DC=gpio_dc,
+                gpio_RST=gpio_rst,
+                bus_speed_hz=62_500_000,
+            )
+            print("SPI interface created successfully")
+        except Exception as e:
+            print(f"Failed to create SPI interface: {e}")
+            raise
+        
+        try:
+            self._device = st7789(serial_interface=serial, width=width, height=height, rotate=rotate)
+            print(f"ST7789 device created: {width}x{height}, rotate={rotate}")
+        except Exception as e:
+            print(f"Failed to create ST7789 device: {e}")
+            raise
 
         if gpio_bl is not None:
             try:
@@ -77,7 +94,12 @@ class Waveshare24Display:
             self._backlight = None
 
     def show(self, image: Image.Image) -> None:
-        self._device.display(image.convert("RGB"))
+        try:
+            rgb_image = image.convert("RGB")
+            self._device.display(rgb_image)
+        except Exception as e:
+            print(f"Error in display.show(): {e}")
+            raise
 
     def cleanup(self) -> None:
         try:
