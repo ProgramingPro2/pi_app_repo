@@ -181,10 +181,10 @@ def render_overlay(
         total_height = sum(h for _, _, h in line_metrics) + line_spacing * (len(line_metrics) - 1)
         x0 = width - max_width - padding * 2
         y0 = height - total_height - padding * 2
-        # Semi-transparent black background
-        overlay_bg = Image.new("RGBA", image.size, (0, 0, 0, 180))
+        # Semi-transparent black background for text overlay
+        overlay_bg = Image.new("RGBA", image.size, (0, 0, 0, 0))  # Start with transparent
         overlay_draw = ImageDraw.Draw(overlay_bg)
-        overlay_draw.rectangle((x0, y0, width, height), fill=(0, 0, 0, 200))
+        overlay_draw.rectangle((x0, y0, width, height), fill=(0, 0, 0, 200))  # Semi-transparent black
         image = Image.alpha_composite(image.convert("RGBA"), overlay_bg).convert("RGB")
         draw = ImageDraw.Draw(image)
 

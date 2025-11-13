@@ -35,7 +35,7 @@ class AppOptions:
     use_synthetic: bool = False
     palette_index: int = 2
     display_rotate: int = 0
-    display_flip_horizontal: bool = True  # Flip to fix mirrored display
+    display_flip_horizontal: bool = False  # Flip to fix mirrored display (set to True if display is mirrored)
     lcd: str = "waveshare"
     lcd_width: int = 240
     lcd_height: int = 320
@@ -190,6 +190,11 @@ class ThermalApp:
                 palette_name, palette_value = COLORMAPS[self.mode_manager.state.palette_idx]
                 gray8 = normalize_to_8bit(frame_raw, lock=self.mode_manager.state.auto_exposure_lock)
                 color_bgr = apply_colormap(gray8, palette_value)
+                
+                # Debug: Check processed image
+                if frame_count % 30 == 0:
+                    print(f"Processed image: gray8 min={gray8.min()}, max={gray8.max()}, mean={gray8.mean():.1f}")
+                    print(f"Color BGR: shape={color_bgr.shape}, min={color_bgr.min()}, max={color_bgr.max()}, mean={color_bgr.mean():.1f}")
 
                 threshold_value = (
                     self.mode_manager.state.threshold_display
@@ -214,24 +219,35 @@ class ThermalApp:
                     highlight_color=mode_result.highlight_color,
                 )
                 image = self._resize_for_display(image)
+                
+                # Debug: Print image info every 30 frames BEFORE flip
+                if frame_count % 30 == 0:
+                    print(f"Display image (before flip): size={image.size}, mode={image.mode}")
+                    # Check if image is all black or all white
+                    if image.mode == 'RGB':
+                        import numpy as np
+                        img_array = np.array(image)
+                        if img_array.sum() == 0:
+                            print("WARNING: Image is completely black!")
+                        elif (img_array == 255).all():
+                            print("WARNING: Image is completely white!")
+                        else:
+                            print(f"Image stats: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
+                
                 # Apply rotation if needed
                 if self.options.display_rotate != 0:
                     image = image.rotate(self.options.display_rotate, expand=False)
                 # Flip horizontally if display is mirrored (default: True to fix common issue)
                 if self.options.display_flip_horizontal:
                     image = image.transpose(Image.FLIP_LEFT_RIGHT)
-                
-                # Debug: Print image info every 30 frames
-                if frame_count % 30 == 0:
-                    print(f"Display image: size={image.size}, mode={image.mode}")
-                    # Check if image is all black
-                    if image.mode == 'RGB':
+                    
+                    # Debug after flip
+                    if frame_count % 30 == 0:
                         import numpy as np
                         img_array = np.array(image)
-                        if img_array.sum() == 0:
-                            print("WARNING: Image is completely black!")
-                        else:
-                            print(f"Image stats: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
+                        if (img_array == 255).all():
+                            print("WARNING: Image is white after flip!")
+                        print(f"Image after flip: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
                     
                     # For first frame, try displaying a test pattern to verify display works
                     if frame_count == 30:
