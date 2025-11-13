@@ -1,10 +1,72 @@
+# Python
 .venv/
+venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.swp
-.DS_Store
-pytest_cache/
+*.py[cod]
+*$py.class
+*.egg
+*.egg-info/
+dist/
 build/
-pi_app/native/build/
+*.egg-info
+
+# Testing
+.pytest_cache/
+.pytest_cache
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# CMake build artifacts
+# Note: We don't ignore native/build/ entirely so we can commit libseekshim.so
+native/build/CMakeFiles/
+native/build/CMakeCache.txt
+native/build/cmake_install.cmake
+native/build/Makefile
+native/build/*.cmake
+native/build/*.a
+native/build/*.o
+native/build/*.d
+native/build/**/*.o
+native/build/**/*.d
+native/build/**/CMakeFiles/
+native/build/**/cmake_install.cmake
+native/build/**/Makefile
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+*.a
+*.o
+*.d
+
+# Allow pre-built libraries to be committed (must come after ignore patterns)
+!native/build/
+!native/build/libseekshim.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# Configuration (user-specific)
+*.local
+config.local.json
+
+# Logs
+*.log

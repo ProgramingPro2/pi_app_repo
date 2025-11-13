@@ -38,7 +38,9 @@ Ensure your Raspberry Pi has:
 
 Follow the detailed setup guide in [docs/setup.md](docs/setup.md) for complete installation instructions.
 
-Quick installation summary:
+**Quick Start (with pre-built binaries):**
+
+If pre-built libraries are included in the repository, you can skip compilation:
 
 ```bash
 # Enable SPI
@@ -47,22 +49,40 @@ sudo reboot
 
 # Install dependencies
 sudo apt update
-sudo apt install -y build-essential cmake pkg-config git \
-    libopencv-dev libusb-1.0-0-dev python3-venv python3-dev \
+sudo apt install -y libopencv-dev libusb-1.0-0-dev python3-venv python3-dev \
     python3-pip libjpeg-dev zlib1g-dev
 
-# Clone repository (if needed)
+# Clone repository
 cd /home/pi
 git clone <repository-url> libseek-thermal
 cd libseek-thermal/pi_app_repo
 
-# Create virtual environment
+# Create virtual environment and install Python dependencies
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip wheel
 pip install numpy opencv-python pillow gpiozero luma.lcd
 
-# Build native library
+# Verify pre-built library exists
+ls -lh native/build/libseekshim.so
+```
+
+**Build from Source (if needed):**
+
+If you need to rebuild or pre-built binaries are not available:
+
+```bash
+# Install build dependencies
+sudo apt install -y build-essential cmake pkg-config git
+
+# Build libseek library first (from parent repository)
+cd /home/pi/libseek-thermal
+mkdir -p build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+
+# Build Python wrapper
+cd pi_app_repo
 mkdir -p native/build
 cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
 cmake --build native/build
@@ -74,7 +94,7 @@ Manual execution:
 
 ```bash
 source .venv/bin/activate
-export LD_LIBRARY_PATH=$(pwd)/native/build:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$(pwd)/native/build:$(pwd)/../build/src:$LD_LIBRARY_PATH
 python -m app.app
 ```
 

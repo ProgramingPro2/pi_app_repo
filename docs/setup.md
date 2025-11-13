@@ -27,7 +27,7 @@ This guide provides detailed instructions for setting up the Raspberry Pi therma
   - SPI Device: 0
   - GPIO DC (Data/Command): GPIO 25
   - GPIO RST (Reset): GPIO 24
-  - GPIO BL (Backlight): Optional (if available)
+  - GPIO BL (Backlight): GPIO 18 (optional, PWM-capable, varies by model)
   - Bus Speed: 62.5 MHz
 
 ### Buttons
@@ -53,7 +53,7 @@ Connect the Waveshare 2.4" LCD to the Raspberry Pi SPI interface:
 | CS | GPIO 8/CE0 (Pin 24) | SPI Chip Select |
 | DC | GPIO 25 (Pin 22) | Data/Command |
 | RST | GPIO 24 (Pin 18) | Reset |
-| BL | GPIO (Optional) | Backlight (if available) |
+| BL | GPIO 18 (Pin 12) | Backlight (optional, PWM-capable) |
 
 **Note:** Verify your specific Waveshare model pinout as it may vary slightly.
 
@@ -143,11 +143,54 @@ Install required Python packages:
 pip install numpy opencv-python pillow gpiozero luma.lcd
 ```
 
-### 6. Build Native Library
+### 6. Pre-built Libraries (Quick Start)
 
-Build the `libseekshim.so` wrapper library:
+**If pre-built libraries are included in the repository**, you can skip compilation and proceed directly to running the application (see step 10). The `libseekshim.so` wrapper library should already be present in `native/build/`.
+
+Verify the pre-built library exists:
 
 ```bash
+ls -lh native/build/libseekshim.so
+```
+
+If the file exists, you can skip to step 8 (Configure USB Permissions) or step 10 (Run Application).
+
+### 7. Build from Source (Optional)
+
+If you need to rebuild the libraries or pre-built binaries are not available, follow these steps:
+
+#### 7.1 Build libseek Library
+
+The Python wrapper requires the base `libseek` library to be built first. If you cloned only `pi_app_repo`, you'll need the parent repository:
+
+```bash
+cd /home/pi
+git clone <parent-repository-url> libseek-thermal
+cd libseek-thermal
+```
+
+Build libseek (no system-wide installation required):
+
+```bash
+mkdir -p build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+This creates `libseek.so` in `build/src/` directory. Verify it was built:
+
+```bash
+ls -lh build/src/libseek.so
+```
+
+**Note:** The wrapper will automatically find the library in the parent directory's `build/src/` folder, so no system-wide installation is needed.
+
+#### 7.2 Build Python Wrapper Library
+
+Now build the `libseekshim.so` wrapper library. The CMake configuration will automatically find the locally-built `libseek.so`:
+
+```bash
+cd pi_app_repo
 mkdir -p native/build
 cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
 cmake --build native/build
@@ -159,7 +202,19 @@ Verify the library was created:
 ls -lh native/build/libseekshim.so
 ```
 
-### 7. Configure USB Permissions (Optional)
+**Alternative: System-wide Installation (Optional)**
+
+If you prefer to install libseek system-wide (requires sudo), you can do:
+
+```bash
+cd /home/pi/libseek-thermal
+sudo cmake --install build
+sudo ldconfig
+```
+
+This installs to `/usr/local/lib/` and `/usr/local/include/seek/`, but it's not required for the wrapper to work.
+
+### 8. Configure USB Permissions (Optional)
 
 To allow non-root access to the Seek Thermal camera, create a udev rule:
 
@@ -189,7 +244,7 @@ sudo usermod -aG plugdev $USER
 
 **Note:** You may need to log out and back in for group changes to take effect.
 
-### 8. Test Hardware Connections
+### 9. Test Hardware Connections
 
 #### Test Display
 
@@ -240,15 +295,17 @@ lsusb | grep -i seek
 
 You should see a device with vendor ID `289d`.
 
-### 9. Run Application Manually
+### 10. Run Application Manually
 
 Test the application before setting up autostart:
 
 ```bash
 source .venv/bin/activate
-export LD_LIBRARY_PATH=$(pwd)/native/build:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$(pwd)/native/build:$(pwd)/../build/src:$LD_LIBRARY_PATH
 python -m app.app
 ```
+
+**Note:** The `LD_LIBRARY_PATH` includes both the wrapper library location and the libseek library location so both can be found at runtime.
 
 The application should:
 - Display thermal video on the LCD
@@ -257,7 +314,7 @@ The application should:
 
 Press `Ctrl+C` to exit.
 
-### 10. Configure Autostart
+### 11. Configure Autostart
 
 Set up the application to start automatically on boot:
 
@@ -283,7 +340,7 @@ Wants=network-online.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/libseek-thermal/pi_app_repo
-Environment=LD_LIBRARY_PATH=/home/pi/libseek-thermal/pi_app_repo/native/build
+Environment=LD_LIBRARY_PATH=/home/pi/libseek-thermal/pi_app_repo/native/build:/home/pi/libseek-thermal/build/src
 ExecStart=/home/pi/libseek-thermal/pi_app_repo/.venv/bin/python -m app.app
 Restart=on-failure
 RestartSec=5
