@@ -1,19 +1,37 @@
 """
 SPI display abstractions for the Waveshare 2.4\" ST7789 panel.
+Uses Waveshare's official driver for reliable operation.
 """
 
 from __future__ import annotations
 
 from typing import Optional
+import sys
+from pathlib import Path
 
 from PIL import Image
 
+# Try to import Waveshare's official driver
+try:
+    # Add Waveshare driver path if LCD_Module_code exists
+    waveshare_path = Path(__file__).resolve().parent.parent / "LCD_Module_code" / "LCD_Module_RPI_code" / "RaspberryPi" / "python"
+    if waveshare_path.exists():
+        sys.path.insert(0, str(waveshare_path))
+    from lib import LCD_2inch4
+    WAVESHARE_AVAILABLE = True
+except ImportError:
+    LCD_2inch4 = None  # type: ignore
+    WAVESHARE_AVAILABLE = False
+
+# Fallback to luma.lcd if Waveshare driver not available
 try:
     from luma.core.interface.serial import spi
     from luma.lcd.device import st7789
-except ImportError:  # pragma: no cover - optional dependency until running on Pi
+    LUMA_AVAILABLE = True
+except ImportError:
     spi = None  # type: ignore
     st7789 = None  # type: ignore
+    LUMA_AVAILABLE = False
 
 
 class DisplayError(RuntimeError):
@@ -42,7 +60,8 @@ class NullDisplay:
 
 class Waveshare24Display:
     """
-    Wraps the Waveshare 2.4\" LCD (ST7789) using luma.lcd.
+    Wraps the Waveshare 2.4\" LCD (ST7789) using Waveshare's official driver.
+    Falls back to luma.lcd if Waveshare driver is not available.
     """
 
     def __init__(
@@ -56,8 +75,31 @@ class Waveshare24Display:
         height: int = 320,
         rotate: int = 0,
     ) -> None:
-        if spi is None or st7789 is None:
-            raise DisplayError("luma.lcd is not installed; cannot drive Waveshare display.")
+        self.width = width
+        self.height = height
+        self.rotate = rotate
+        self._use_waveshare = False
+        self._backlight = None
+        
+        # Prefer Waveshare's official driver if available
+        if WAVESHARE_AVAILABLE and LCD_2inch4 is not None:
+            try:
+                print("Using Waveshare official driver...")
+                self._device = LCD_2inch4.LCD_2inch4()
+                self._device.Init()
+                self._use_waveshare = True
+                print(f"Waveshare display initialized: {width}x{height}")
+                return
+            except Exception as e:
+                print(f"Failed to initialize Waveshare driver: {e}")
+                print("Falling back to luma.lcd...")
+        
+        # Fallback to luma.lcd
+        if not LUMA_AVAILABLE or spi is None or st7789 is None:
+            raise DisplayError(
+                "Neither Waveshare driver nor luma.lcd is available. "
+                "Install Waveshare driver or: pip install luma.lcd"
+            )
         
         # Check if RPi.GPIO is available (required by luma.lcd)
         try:
@@ -68,10 +110,8 @@ class Waveshare24Display:
                 "Note: RPi.GPIO only works on Raspberry Pi hardware."
             )
 
-        print(f"Initializing SPI display: port={spi_port}, device={spi_device}, DC={gpio_dc} (Pin 22), RST={gpio_rst} (Pin 13), BL={gpio_bl} (Pin 12)")
+        print(f"Using luma.lcd fallback: port={spi_port}, device={spi_device}, DC={gpio_dc}, RST={gpio_rst}, BL={gpio_bl}")
         try:
-            # Valid bus speeds (MHz): 0.5, 1, 2, 4, 8, 16, 20, 24, 28, 32, 36, 40, 44, 48, 50, 52
-            # Using 50 MHz (50,000,000 Hz) for good performance
             serial = spi(
                 port=spi_port,
                 device=spi_device,
@@ -79,16 +119,10 @@ class Waveshare24Display:
                 gpio_RST=gpio_rst,
                 bus_speed_hz=50_000_000,
             )
-            print("SPI interface created successfully")
-        except Exception as e:
-            print(f"Failed to create SPI interface: {e}")
-            raise
-        
-        try:
             self._device = st7789(serial_interface=serial, width=width, height=height, rotate=rotate)
-            print(f"ST7789 device created: {width}x{height}, rotate={rotate}")
+            print(f"luma.lcd ST7789 device created: {width}x{height}, rotate={rotate}")
         except Exception as e:
-            print(f"Failed to create ST7789 device: {e}")
+            print(f"Failed to create luma.lcd device: {e}")
             raise
 
         # Enable backlight (GPIO 18 = Pin 12 for Waveshare 2.4")
@@ -98,18 +132,13 @@ class Waveshare24Display:
                 try:
                     self._backlight = PWMLED(gpio_bl)
                     self._backlight.value = 1.0
-                    print(f"Backlight enabled on GPIO {gpio_bl} (Pin {self._gpio_to_pin(gpio_bl)})")
+                    print(f"Backlight enabled on GPIO {gpio_bl}")
                 except Exception as e:
-                    print(f"Warning: Could not enable backlight on GPIO {gpio_bl}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    print(f"Warning: Could not enable backlight: {e}")
                     self._backlight = None
-            except ImportError:  # pragma: no cover
+            except ImportError:
                 print("Warning: gpiozero not available for backlight control")
                 self._backlight = None
-        else:
-            self._backlight = None
-            print("Warning: No backlight GPIO specified - display may be dark!")
     
     def _gpio_to_pin(self, gpio: int) -> int:
         """Convert GPIO number to physical pin number (for reference)"""
@@ -121,11 +150,40 @@ class Waveshare24Display:
 
     def show(self, image: Image.Image) -> None:
         try:
-            rgb_image = image.convert("RGB")
+            # Convert to RGB and ensure proper format
+            if image.mode != "RGB":
+                rgb_image = image.convert("RGB")
+            else:
+                rgb_image = image.copy()
+            
             # Ensure image is the right size for display
-            if rgb_image.size != (self._device.width, self._device.height):
-                rgb_image = rgb_image.resize((self._device.width, self._device.height), Image.BILINEAR)
-            self._device.display(rgb_image)
+            if rgb_image.size != (self.width, self.height):
+                rgb_image = rgb_image.resize((self.width, self.height), Image.BILINEAR)
+            
+            # Apply rotation if needed
+            if self.rotate != 0:
+                rgb_image = rgb_image.rotate(-self.rotate * 90, expand=False)
+            
+            # Debug: Check image data before sending
+            if hasattr(self, '_frame_count'):
+                self._frame_count += 1
+            else:
+                self._frame_count = 1
+            
+            if self._frame_count <= 5 or self._frame_count % 60 == 0:
+                import numpy as np
+                img_array = np.array(rgb_image)
+                print(f"Display.show() frame {self._frame_count}: size={rgb_image.size}, mode={rgb_image.mode}, "
+                      f"min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
+            
+            # Display using Waveshare driver or luma.lcd
+            if self._use_waveshare:
+                # Waveshare's ShowImage method
+                self._device.ShowImage(rgb_image)
+            else:
+                # luma.lcd display method
+                self._device.display(rgb_image)
+            
         except Exception as e:
             print(f"Error in display.show(): {e}")
             import traceback
@@ -134,7 +192,10 @@ class Waveshare24Display:
 
     def cleanup(self) -> None:
         try:
-            self._device.hide()
+            if self._use_waveshare:
+                self._device.module_exit()
+            else:
+                self._device.hide()
         except Exception:
             pass
         if getattr(self, "_backlight", None):

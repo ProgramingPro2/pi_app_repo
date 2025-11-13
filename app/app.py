@@ -48,6 +48,17 @@ class ThermalApp:
             print(f"Opening Seek camera (type: {self.options.camera_type})...")
             camera = SeekCamera(camera_type=self.options.camera_type, ffc_path=self.options.ffc_path)
             print(f"Camera opened: {camera.width}x{camera.height}")
+            # Give camera a moment to stabilize
+            import time
+            time.sleep(0.5)
+            # Read a few frames to let camera warm up
+            for i in range(5):
+                try:
+                    camera.read_raw()
+                except Exception:
+                    pass
+                time.sleep(0.1)
+            print("Camera warmed up")
             return camera
         except SeekCameraError as e:
             print(f"Failed to open camera: {e}")
@@ -70,65 +81,122 @@ class ThermalApp:
 
     async def run(self) -> None:
         frame_count = 0
+        consecutive_errors = 0
+        max_errors = 10
         try:
             while True:
-                # Read raw frame from camera
-                frame_raw = self.camera.read_raw()
-                frame_count += 1
+                try:
+                    # Read raw frame from camera
+                    frame_raw = self.camera.read_raw()
+                    consecutive_errors = 0
+                    frame_count += 1
+                except SeekCameraError as e:
+                    consecutive_errors += 1
+                    if consecutive_errors >= max_errors:
+                        print(f"Too many camera errors ({consecutive_errors}), shutting down")
+                        break
+                    print(f"Camera read error (attempt {consecutive_errors}/{max_errors}): {e}")
+                    await asyncio.sleep(0.5)
+                    continue
+                except Exception as e:
+                    consecutive_errors += 1
+                    if consecutive_errors >= max_errors:
+                        print(f"Unexpected error ({consecutive_errors}): {e}")
+                        import traceback
+                        traceback.print_exc()
+                        break
+                    print(f"Unexpected error (attempt {consecutive_errors}/{max_errors}): {e}")
+                    await asyncio.sleep(0.5)
+                    continue
                 
-                # Normalize to 0-255 range
-                frame_min = frame_raw.min()
-                frame_max = frame_raw.max()
+                # Normalize to 0-255 range with better handling
+                frame_min = float(frame_raw.min())
+                frame_max = float(frame_raw.max())
+                frame_range = frame_max - frame_min
                 
-                # Debug every 30 frames
-                if frame_count % 30 == 0:
-                    print(f"Frame {frame_count}: raw min={frame_min}, max={frame_max}, shape={frame_raw.shape}")
+                # Debug first 10 frames and then every 60 frames
+                if frame_count <= 10 or frame_count % 60 == 0:
+                    print(f"Frame {frame_count}: raw min={frame_min:.0f}, max={frame_max:.0f}, range={frame_range:.0f}, shape={frame_raw.shape}", flush=True)
                 
-                if frame_max > frame_min:
-                    frame_normalized = ((frame_raw.astype(np.float32) - frame_min) / (frame_max - frame_min) * 255).astype(np.uint8)
+                # Normalize frame - use a fixed range if dynamic range is too small
+                if frame_range > 10:  # Need at least 10 units of range
+                    # Normalize to 0-255
+                    frame_normalized = ((frame_raw.astype(np.float32) - frame_min) / frame_range * 255.0).astype(np.uint8)
+                elif frame_range > 0:
+                    # Very small range - stretch it more aggressively
+                    # Add some padding to ensure we use the full 0-255 range
+                    padding = max(100.0, frame_range * 2)
+                    frame_center = (frame_min + frame_max) / 2.0
+                    frame_min_adj = frame_center - padding
+                    frame_max_adj = frame_center + padding
+                    frame_range_adj = frame_max_adj - frame_min_adj
+                    frame_normalized = np.clip(((frame_raw.astype(np.float32) - frame_min_adj) / frame_range_adj * 255.0), 0, 255).astype(np.uint8)
+                    if frame_count <= 10:
+                        print(f"  Small range detected, using adjusted normalization", flush=True)
                 else:
-                    print(f"WARNING: Frame {frame_count} has no range (min==max={frame_min})")
-                    frame_normalized = np.zeros_like(frame_raw, dtype=np.uint8)
+                    # All pixels same value - show as mid-gray
+                    frame_normalized = np.full_like(frame_raw, 128, dtype=np.uint8)
+                    if frame_count <= 10:
+                        print(f"Frame {frame_count}: constant raw value {frame_min:.0f}, showing as gray", flush=True)
                 
-                # Check if normalized frame is all white
-                if frame_normalized.max() == 255 and frame_normalized.min() == 255:
-                    print(f"WARNING: Frame {frame_count} normalized to all white!")
+                # Check if normalized frame is valid
+                norm_min = frame_normalized.min()
+                norm_max = frame_normalized.max()
+                norm_mean = frame_normalized.mean()
+                
+                if frame_count <= 10 or frame_count % 60 == 0:
+                    print(f"  Normalized: min={norm_min}, max={norm_max}, mean={norm_mean:.1f}", flush=True)
+                
+                # Safety check: if normalized frame is all white or all black, force some variation
+                if norm_max == 255 and norm_min >= 250:
+                    print(f"  WARNING: Frame {frame_count} is all white, forcing variation", flush=True)
+                    # Create a gradient pattern mixed with the frame
+                    y_grad = np.linspace(0, 255, frame_normalized.shape[0], dtype=np.uint8)
+                    x_grad = np.linspace(0, 255, frame_normalized.shape[1], dtype=np.uint8)
+                    grad = (y_grad[:, np.newaxis] + x_grad[np.newaxis, :]) // 2
+                    frame_normalized = (frame_normalized.astype(np.uint16) + grad.astype(np.uint16)) // 2
+                    frame_normalized = frame_normalized.astype(np.uint8)
+                elif norm_max <= 5 and norm_min == 0:
+                    print(f"  WARNING: Frame {frame_count} is all black, forcing variation", flush=True)
+                    # Create a gradient pattern
+                    y_grad = np.linspace(0, 255, frame_normalized.shape[0], dtype=np.uint8)
+                    x_grad = np.linspace(0, 255, frame_normalized.shape[1], dtype=np.uint8)
+                    grad = (y_grad[:, np.newaxis] + x_grad[np.newaxis, :]) // 2
+                    frame_normalized = grad
                 
                 # Convert to RGB (grayscale thermal image)
-                frame_rgb = np.stack([frame_normalized] * 3, axis=-1)
+                # Stack the grayscale channel 3 times to make RGB
+                frame_rgb = np.stack([frame_normalized, frame_normalized, frame_normalized], axis=-1)
                 
-                # Create PIL image
+                # Create PIL image from numpy array
                 image = Image.fromarray(frame_rgb, mode='RGB')
                 
-                # Check image before resize
-                if frame_count % 30 == 0:
-                    img_array = np.array(image)
-                    print(f"PIL image: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
+                # Verify image before resize
+                img_array = np.array(image)
+                if frame_count <= 10:
+                    print(f"  PIL image before resize: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
                 
                 # Resize to display size
                 image = image.resize((self.options.lcd_width, self.options.lcd_height), Image.BILINEAR)
                 
-                # Check image after resize
-                if frame_count % 30 == 0:
-                    img_array = np.array(image)
+                # Verify image after resize
+                img_array = np.array(image)
+                if frame_count <= 10:
+                    print(f"  PIL image after resize: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
                     if (img_array == 255).all():
-                        print(f"WARNING: Image is all white after resize!")
-                    print(f"Resized image: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
+                        print(f"  ERROR: Image is all white after resize!")
+                    elif (img_array == 0).all():
+                        print(f"  ERROR: Image is all black after resize!")
                 
                 # Apply flip if needed
                 if self.options.display_flip_horizontal:
                     image = image.transpose(Image.FLIP_LEFT_RIGHT)
                 
                 # Display
-                try:
-                    self.display.show(image)
-                except Exception as e:
-                    print(f"Error displaying frame {frame_count}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                self.display.show(image)
                 
-                # Small delay to prevent overwhelming the display
-                await asyncio.sleep(0.1)  # ~10 FPS
+                # Small delay for frame rate control and to give display time to update
+                await asyncio.sleep(0.15)  # ~6-7 FPS - slower to ensure display updates
         finally:
             self.shutdown()
 
@@ -144,8 +212,22 @@ class ThermalApp:
 
 
 async def main() -> None:
-    app = ThermalApp(AppOptions())
-    await app.run()
+    import sys
+    print("Starting thermal app...", flush=True)
+    sys.stdout.flush()
+    options = AppOptions()
+    print(f"Options: {options}", flush=True)
+    sys.stdout.flush()
+    try:
+        app = ThermalApp(options)
+        print("App initialized, starting run loop...", flush=True)
+        sys.stdout.flush()
+        await app.run()
+    except Exception as e:
+        print(f"Fatal error in main: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
