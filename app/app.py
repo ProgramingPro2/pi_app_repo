@@ -15,6 +15,7 @@ from PIL import Image
 
 from . import buttons
 from .camera import SeekCamera, SeekCameraError, SyntheticCamera, autodetect_camera_type
+from .config import ConfigData, load_config, save_config
 from .display import NullDisplay, Waveshare24Display
 from .modes import ModeHooks, ModeManager
 from .overlays import BannerQueue, format_status
