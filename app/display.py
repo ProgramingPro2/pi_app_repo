@@ -61,12 +61,14 @@ class Waveshare24Display:
 
         print(f"Initializing SPI display: port={spi_port}, device={spi_device}, DC={gpio_dc}, RST={gpio_rst}")
         try:
+            # Valid bus speeds (MHz): 0.5, 1, 2, 4, 8, 16, 20, 24, 28, 32, 36, 40, 44, 48, 50, 52
+            # Using 50 MHz (50,000,000 Hz) for good performance
             serial = spi(
                 port=spi_port,
                 device=spi_device,
                 gpio_DC=gpio_dc,
                 gpio_RST=gpio_rst,
-                bus_speed_hz=62_500_000,
+                bus_speed_hz=50_000_000,
             )
             print("SPI interface created successfully")
         except Exception as e:
