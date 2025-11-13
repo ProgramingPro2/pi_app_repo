@@ -27,7 +27,9 @@ class AppOptions:
     lcd_width: int = 240
     lcd_height: int = 320
     colormap: str = "0"  # Standard OpenCV colormap number (0-21) or name
-    do_ffc: bool = False  # Perform flat field calibration
+    do_ffc: bool = False  # Use flat field calibration
+    capture_ffc: bool = False  # Capture new FFC
+    ffc_output: Optional[str] = None  # Output path for captured FFC
 
 
 class ThermalApp:
@@ -50,8 +52,20 @@ class ThermalApp:
         try:
             print(f"Opening Seek camera (type: {self.options.camera_type})...")
             ffc_path = self.options.ffc_path
+            
+            # If capturing new FFC, do that first
+            if self.options.capture_ffc:
+                ffc_path = self._capture_ffc()
+                if ffc_path:
+                    print(f"FFC captured and saved to: {ffc_path}")
+                    # Use the captured FFC
+                    self.options.ffc_path = ffc_path
+                    self.options.do_ffc = True
+            
+            # Use FFC if requested
             if self.options.do_ffc and ffc_path is None:
                 print("Warning: --ffc flag set but no FFC path provided. FFC will be skipped.")
+            
             camera = SeekCamera(camera_type=self.options.camera_type, ffc_path=ffc_path)
             print(f"Camera opened: {camera.width}x{camera.height}")
             # Give camera a moment to stabilize (reduced delay for faster startup)
@@ -71,6 +85,94 @@ class ThermalApp:
             if self.options.use_synthetic:
                 return SyntheticCamera()
             raise
+    
+    def _capture_ffc(self) -> Optional[str]:
+        """Capture a new flat field calibration."""
+        import time
+        import os
+        from pathlib import Path
+        from datetime import datetime
+        
+        print("\n=== Flat Field Calibration Capture ===")
+        print("Please cover the camera lens with a uniform-temperature object")
+        print("(e.g., a piece of paper, cloth, or your hand)")
+        print("Starting capture in 3 seconds...")
+        time.sleep(3)
+        
+        try:
+            # Open camera temporarily for FFC capture
+            temp_camera = SeekCamera(camera_type=self.options.camera_type, ffc_path=None)
+            print(f"Camera opened: {temp_camera.width}x{temp_camera.height}")
+            
+            # Warm up camera
+            time.sleep(0.5)
+            for i in range(5):
+                try:
+                    temp_camera.read_raw()
+                except Exception:
+                    pass
+                time.sleep(0.1)
+            
+            # Capture multiple frames and average them
+            num_frames = 60
+            print(f"Capturing {num_frames} frames for averaging...")
+            frames = []
+            
+            for i in range(num_frames):
+                try:
+                    frame = temp_camera.read_raw()
+                    frames.append(frame.astype(np.float32))
+                    if (i + 1) % 10 == 0:
+                        print(f"  Captured {i + 1}/{num_frames} frames...")
+                    time.sleep(0.05)
+                except Exception as e:
+                    print(f"  Warning: Frame {i+1} failed: {e}")
+                    continue
+            
+            if not frames:
+                print("ERROR: No frames captured!")
+                temp_camera.close()
+                return None
+            
+            # Average all frames
+            print("Averaging frames...")
+            avg_frame = np.mean(frames, axis=0).astype(np.uint16)
+            
+            # Determine output path
+            if self.options.ffc_output:
+                output_path = Path(self.options.ffc_output)
+            else:
+                # Default: ~/.config/libseek-pi/ffc/
+                config_dir = Path.home() / ".config" / "libseek-pi" / "ffc"
+                config_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = config_dir / f"ffc_{timestamp}.png"
+            
+            # Save as PNG
+            from PIL import Image
+            # Normalize to 0-65535 range for 16-bit PNG
+            ffc_min = avg_frame.min()
+            ffc_max = avg_frame.max()
+            if ffc_max > ffc_min:
+                normalized = ((avg_frame.astype(np.float32) - ffc_min) / (ffc_max - ffc_min) * 65535.0).astype(np.uint16)
+            else:
+                normalized = avg_frame
+            
+            # Save as 16-bit grayscale PNG
+            ffc_image = Image.fromarray(normalized, mode='I;16')
+            ffc_image.save(output_path, 'PNG')
+            
+            print(f"FFC saved to: {output_path}")
+            print(f"FFC stats: min={avg_frame.min()}, max={avg_frame.max()}, mean={avg_frame.mean():.1f}")
+            
+            temp_camera.close()
+            return str(output_path)
+            
+        except Exception as e:
+            print(f"ERROR: Failed to capture FFC: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     def _init_display(self):
         if self.options.lcd == "waveshare":
@@ -342,7 +444,9 @@ async def main() -> None:
         display_flip_horizontal=args.flip_horizontal,
         lcd=args.lcd if args.lcd != "none" else "null",
         colormap=args.colormap,
-        do_ffc=args.ffc,
+        do_ffc=args.ffc or args.ffc_path is not None,
+        capture_ffc=args.ffc_capture,
+        ffc_output=args.ffc_output,
     )
     
     print(f"Options: camera={options.camera_type}, colormap={options.colormap}, "
