@@ -166,6 +166,8 @@ class ThermalApp:
             print(f"FFC stats: min={avg_frame.min()}, max={avg_frame.max()}, mean={avg_frame.mean():.1f}")
             
             temp_camera.close()
+            # Small delay to ensure camera is fully released
+            time.sleep(0.5)
             return str(output_path)
             
         except Exception as e:
