@@ -83,7 +83,12 @@ class ThermalApp:
 
         self.button_controller = button_controller or self._build_default_buttons()
         if self.button_controller:
-            self.button_controller.setup()
+            # Try to set up buttons, but don't fail if GPIO is unavailable
+            buttons_available = self.button_controller.setup()
+            if not buttons_available:
+                # No buttons available, clear the controller
+                self.button_controller.close()
+                self.button_controller = None
 
         self.camera = self._init_camera()
         self.display = self._init_display()

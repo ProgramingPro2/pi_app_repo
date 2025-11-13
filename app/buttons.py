@@ -34,10 +34,17 @@ class ButtonController:
     specs: Dict[str, ButtonSpec]
     _buttons: Dict[str, object] = field(default_factory=dict, init=False)
 
-    def setup(self) -> None:
+    def setup(self) -> bool:
+        """
+        Set up GPIO buttons.
+        
+        Returns:
+            True if at least one button was successfully set up, False otherwise.
+        """
         if Button is None:
-            return
+            return False
 
+        success_count = 0
         for key, spec in self.specs.items():
             try:
                 btn = Button(spec.pin, pull_up=True, bounce_time=0.05)
@@ -46,10 +53,13 @@ class ButtonController:
                     btn.hold_time = spec.hold_time
                     btn.when_held = spec.hold_action
                 self._buttons[key] = btn
-            except (OSError, FileNotFoundError, KeyError, RuntimeError):
-                # GPIO not available (e.g., running on non-Pi system)
+                success_count += 1
+            except (OSError, FileNotFoundError, KeyError, RuntimeError, PermissionError):
+                # GPIO not available (e.g., running on non-Pi system or no permissions)
                 # Silently skip button setup - application can run without buttons
                 pass
+        
+        return success_count > 0
 
     def close(self) -> None:
         for btn in self._buttons.values():
