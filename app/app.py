@@ -108,11 +108,17 @@ class ThermalApp:
 
     def _init_camera(self):
         if self.options.use_synthetic:
+            print("Using synthetic camera (for testing)")
             return SyntheticCamera()
         try:
-            return SeekCamera(camera_type=self.options.camera_type, ffc_path=self.options.ffc_path)
-        except SeekCameraError:
+            print(f"Attempting to open Seek camera (type: {self.options.camera_type})...")
+            camera = SeekCamera(camera_type=self.options.camera_type, ffc_path=self.options.ffc_path)
+            print(f"Camera opened successfully: {camera.width}x{camera.height}")
+            return camera
+        except SeekCameraError as e:
+            print(f"Failed to open Seek camera: {e}")
             if self.options.use_synthetic:
+                print("Falling back to synthetic camera")
                 return SyntheticCamera()
             raise
 
@@ -164,6 +170,7 @@ class ThermalApp:
             self.banner_queue.push(message)
 
     async def run(self) -> None:
+        frame_count = 0
         try:
             while True:
                 if self._pending_reload is not None:
@@ -171,6 +178,12 @@ class ThermalApp:
                     self._pending_reload = None
 
                 frame_raw = self.camera.read_raw()
+                frame_count += 1
+                
+                # Debug: Print frame info every 30 frames
+                if frame_count % 30 == 0:
+                    print(f"Frame {frame_count}: shape={frame_raw.shape}, min={frame_raw.min()}, max={frame_raw.max()}, mean={frame_raw.mean():.1f}")
+                
                 mode_result = self.mode_manager.update(frame_raw)
 
                 palette_name, palette_value = COLORMAPS[self.mode_manager.state.palette_idx]
@@ -200,6 +213,19 @@ class ThermalApp:
                     highlight_color=mode_result.highlight_color,
                 )
                 image = self._resize_for_display(image)
+                
+                # Debug: Print image info every 30 frames
+                if frame_count % 30 == 0:
+                    print(f"Display image: size={image.size}, mode={image.mode}")
+                    # Check if image is all black
+                    if image.mode == 'RGB':
+                        import numpy as np
+                        img_array = np.array(image)
+                        if img_array.sum() == 0:
+                            print("WARNING: Image is completely black!")
+                        else:
+                            print(f"Image stats: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
+                
                 try:
                     self.display.show(image)
                 except Exception as e:

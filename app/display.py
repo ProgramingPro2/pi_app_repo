@@ -107,9 +107,14 @@ class Waveshare24Display:
     def show(self, image: Image.Image) -> None:
         try:
             rgb_image = image.convert("RGB")
+            # Ensure image is the right size for display
+            if rgb_image.size != (self._device.width, self._device.height):
+                rgb_image = rgb_image.resize((self._device.width, self._device.height), Image.BILINEAR)
             self._device.display(rgb_image)
         except Exception as e:
             print(f"Error in display.show(): {e}")
+            import traceback
+            traceback.print_exc()
             raise
 
     def cleanup(self) -> None:
