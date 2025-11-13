@@ -4,6 +4,7 @@ Simple thermal camera viewer - displays raw thermal image on LCD.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 from dataclasses import dataclass
 from typing import Optional
@@ -25,6 +26,8 @@ class AppOptions:
     lcd: str = "waveshare"
     lcd_width: int = 240
     lcd_height: int = 320
+    colormap: str = "grayscale"  # grayscale, hot, cool, rainbow, jet, viridis, plasma
+    do_ffc: bool = False  # Perform flat field calibration
 
 
 class ThermalApp:
@@ -46,7 +49,10 @@ class ThermalApp:
             return SyntheticCamera()
         try:
             print(f"Opening Seek camera (type: {self.options.camera_type})...")
-            camera = SeekCamera(camera_type=self.options.camera_type, ffc_path=self.options.ffc_path)
+            ffc_path = self.options.ffc_path
+            if self.options.do_ffc and ffc_path is None:
+                print("Warning: --ffc flag set but no FFC path provided. FFC will be skipped.")
+            camera = SeekCamera(camera_type=self.options.camera_type, ffc_path=ffc_path)
             print(f"Camera opened: {camera.width}x{camera.height}")
             # Give camera a moment to stabilize (reduced delay for faster startup)
             import time
@@ -133,9 +139,8 @@ class ThermalApp:
                     # All pixels same value - show as mid-gray
                     frame_normalized = np.full_like(frame_raw, 128, dtype=np.uint8)
                 
-                # Convert to RGB (grayscale thermal image)
-                # Stack the grayscale channel 3 times to make RGB
-                frame_rgb = np.stack([frame_normalized, frame_normalized, frame_normalized], axis=-1)
+                # Apply color palette
+                frame_rgb = self._apply_colormap(frame_normalized)
                 
                 # Create PIL image from numpy array
                 image = Image.fromarray(frame_rgb, mode='RGB')
@@ -155,6 +160,42 @@ class ThermalApp:
         finally:
             self.shutdown()
 
+    def _apply_colormap(self, gray_frame: np.ndarray) -> np.ndarray:
+        """Apply color palette to grayscale thermal image."""
+        colormap = self.options.colormap.lower()
+        
+        if colormap == "grayscale":
+            # Simple grayscale - stack 3 channels
+            return np.stack([gray_frame, gray_frame, gray_frame], axis=-1)
+        
+        # Use OpenCV colormaps if available
+        try:
+            import cv2
+            colormap_map = {
+                "hot": cv2.COLORMAP_HOT,
+                "cool": cv2.COLORMAP_COOL,
+                "rainbow": cv2.COLORMAP_RAINBOW,
+                "jet": cv2.COLORMAP_JET,
+                "viridis": cv2.COLORMAP_VIRIDIS,
+                "plasma": cv2.COLORMAP_PLASMA,
+                "inferno": cv2.COLORMAP_INFERNO,
+                "magma": cv2.COLORMAP_MAGMA,
+                "turbo": cv2.COLORMAP_TURBO,
+            }
+            
+            if colormap in colormap_map:
+                # OpenCV colormaps expect uint8 grayscale input
+                colored = cv2.applyColorMap(gray_frame, colormap_map[colormap])
+                # Convert BGR to RGB (OpenCV uses BGR)
+                return cv2.cvtColor(colored, cv2.COLOR_BGR2RGB)
+        except ImportError:
+            pass
+        
+        # Fallback: simple grayscale if OpenCV not available or unknown colormap
+        if colormap != "grayscale":
+            print(f"Warning: Colormap '{colormap}' not available, using grayscale")
+        return np.stack([gray_frame, gray_frame, gray_frame], axis=-1)
+
     def shutdown(self) -> None:
         try:
             self.camera.close()
@@ -166,13 +207,114 @@ class ThermalApp:
             pass
 
 
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Thermal camera viewer for Raspberry Pi",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run with default settings (grayscale)
+  python -m app.app
+
+  # Run with hot colormap
+  python -m app.app --colormap hot
+
+  # Run with FFC (flat field calibration)
+  python -m app.app --ffc --ffc-path /path/to/ffc.png
+
+  # Run with rainbow colormap and horizontal flip
+  python -m app.app --colormap rainbow --flip-horizontal
+
+Available colormaps: grayscale, hot, cool, rainbow, jet, viridis, plasma, inferno, magma, turbo
+        """
+    )
+    
+    parser.add_argument(
+        "--camera-type",
+        type=str,
+        default="seek",
+        choices=["seek", "seekpro"],
+        help="Camera type: 'seek' for CompactXR, 'seekpro' for CompactPRO (default: seek)"
+    )
+    
+    parser.add_argument(
+        "--ffc-path",
+        type=str,
+        default=None,
+        help="Path to flat field calibration PNG file"
+    )
+    
+    parser.add_argument(
+        "--ffc",
+        action="store_true",
+        help="Perform flat field calibration (requires --ffc-path)"
+    )
+    
+    parser.add_argument(
+        "--colormap",
+        type=str,
+        default="grayscale",
+        choices=["grayscale", "hot", "cool", "rainbow", "jet", "viridis", "plasma", "inferno", "magma", "turbo"],
+        help="Color palette to use (default: grayscale)"
+    )
+    
+    parser.add_argument(
+        "--flip-horizontal",
+        action="store_true",
+        help="Flip display horizontally"
+    )
+    
+    parser.add_argument(
+        "--rotate",
+        type=int,
+        default=0,
+        choices=[0, 90, 180, 270],
+        help="Rotate display (degrees: 0, 90, 180, 270, default: 0)"
+    )
+    
+    parser.add_argument(
+        "--synthetic",
+        action="store_true",
+        help="Use synthetic camera (for testing without hardware)"
+    )
+    
+    parser.add_argument(
+        "--lcd",
+        type=str,
+        default="waveshare",
+        choices=["waveshare", "none"],
+        help="LCD display type (default: waveshare)"
+    )
+    
+    return parser.parse_args()
+
+
 async def main() -> None:
     import sys
+    args = parse_args()
+    
     print("Starting thermal app...", flush=True)
     sys.stdout.flush()
-    options = AppOptions()
-    print(f"Options: {options}", flush=True)
+    
+    # Convert rotate degrees to luma.lcd rotate value (0-3)
+    rotate_value = args.rotate // 90
+    
+    options = AppOptions(
+        camera_type=args.camera_type,
+        ffc_path=args.ffc_path,
+        use_synthetic=args.synthetic,
+        display_rotate=rotate_value,
+        display_flip_horizontal=args.flip_horizontal,
+        lcd=args.lcd if args.lcd != "none" else "null",
+        colormap=args.colormap,
+        do_ffc=args.ffc,
+    )
+    
+    print(f"Options: camera={options.camera_type}, colormap={options.colormap}, "
+          f"ffc={options.do_ffc}, flip={options.display_flip_horizontal}, rotate={args.rotate}°", flush=True)
     sys.stdout.flush()
+    
     try:
         app = ThermalApp(options)
         print("App initialized, starting run loop...", flush=True)
