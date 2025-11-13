@@ -101,8 +101,10 @@ class ThermalApp:
             print("If you have a Waveshare display connected, check:")
             print("  1. SPI is enabled: sudo raspi-config nonint do_spi 0")
             print("  2. luma.lcd is installed: pip install luma.lcd")
-            print("  3. Display wiring is correct")
-            print("  4. AppOptions.lcd is set to 'waveshare'")
+            print("  3. RPi.GPIO is installed: pip install RPi.GPIO")
+            print("  4. Display wiring is correct")
+            print("  5. AppOptions.lcd is set to 'waveshare'")
+            print("  6. You are running on a Raspberry Pi (RPi.GPIO only works on Pi hardware)")
 
     def _init_camera(self):
         if self.options.use_synthetic:

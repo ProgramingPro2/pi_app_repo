@@ -58,6 +58,15 @@ class Waveshare24Display:
     ) -> None:
         if spi is None or st7789 is None:
             raise DisplayError("luma.lcd is not installed; cannot drive Waveshare display.")
+        
+        # Check if RPi.GPIO is available (required by luma.lcd)
+        try:
+            import RPi.GPIO  # noqa: F401
+        except ImportError:
+            raise DisplayError(
+                "RPi.GPIO is not installed. Install it with: pip install RPi.GPIO\n"
+                "Note: RPi.GPIO only works on Raspberry Pi hardware."
+            )
 
         print(f"Initializing SPI display: port={spi_port}, device={spi_device}, DC={gpio_dc}, RST={gpio_rst}")
         try:

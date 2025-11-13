@@ -140,8 +140,10 @@ pip install --upgrade pip wheel
 Install required Python packages:
 
 ```bash
-pip install numpy opencv-python pillow gpiozero luma.lcd
+pip install numpy opencv-python pillow gpiozero luma.lcd RPi.GPIO
 ```
+
+**Note:** `RPi.GPIO` is required by `luma.lcd` for SPI display control. It only works on Raspberry Pi hardware.
 
 ### 6. Pre-built Libraries (Quick Start)
 

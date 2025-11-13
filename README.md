@@ -61,7 +61,7 @@ cd libseek-thermal/pi_app_repo
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip wheel
-pip install numpy opencv-python pillow gpiozero luma.lcd
+pip install numpy opencv-python pillow gpiozero luma.lcd RPi.GPIO
 
 # Verify pre-built library exists
 ls -lh native/build/libseekshim.so
