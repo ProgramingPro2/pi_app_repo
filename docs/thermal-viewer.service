@@ -1,17 +1,20 @@
 [Unit]
-Description=Seek Thermal Waveshare Viewer
-After=network-online.target
-Wants=network-online.target
+Description=Thermal Camera Viewer
+After=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/libseek-thermal
-Environment=LD_LIBRARY_PATH=/home/pi/libseek-thermal/pi_app/native/build
-ExecStart=/home/pi/libseek-thermal/.venv/bin/python -m pi_app.app.app
-Restart=on-failure
-RestartSec=5
+User=jpearce
+WorkingDirectory=/home/jpearce/pi_app_repo
+Environment="PATH=/home/jpearce/pi_app_repo/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="LD_LIBRARY_PATH=/home/jpearce/pi_app_repo/native/build:/home/jpearce/libseek-thermal/build/src"
+# Wait a bit for USB devices to be ready
+ExecStartPre=/bin/sleep 5
+ExecStart=/home/jpearce/pi_app_repo/.venv/bin/python3 -m app.app --colormap 5
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-
