@@ -237,34 +237,6 @@ lsmod | grep spi
 
 You should see `spi_bcm2835` loaded.
 
-#### Test Buttons
-
-Test GPIO access:
-
-```bash
-gpio readall
-```
-
-Verify buttons are wired correctly (optional manual test):
-
-```python
-from gpiozero import Button
-from signal import pause
-
-def pressed(btn_name):
-    print(f"{btn_name} button pressed!")
-
-btn_mode = Button(5, pull_up=True)
-btn_down = Button(6, pull_up=True)
-btn_up = Button(13, pull_up=True)
-
-btn_mode.when_pressed = lambda: pressed("MODE")
-btn_down.when_pressed = lambda: pressed("DOWN")
-btn_up.when_pressed = lambda: pressed("UP")
-
-print("Press buttons to test. Press Ctrl+C to exit.")
-pause()
-```
 
 #### Test Camera
 
@@ -290,10 +262,21 @@ python -m app.app
 
 The application should:
 - Display thermal video on the LCD
-- Respond to button presses
-- Show mode banners when cycling modes
+- Show live thermal images in real-time
 
 Press `Ctrl+C` to exit.
+
+**Example with different options:**
+```bash
+# Run with hot colormap
+python3 -m app.app --colormap 12
+
+# Run with rainbow colormap and horizontal flip
+python3 -m app.app --colormap 5 --flip-horizontal
+
+# See all options
+python3 -m app.app --help
+```
 
 ### 11. Configure Autostart
 
@@ -366,11 +349,6 @@ journalctl -u thermal-viewer.service -f
 3. Verify user is in `plugdev` group: `groups`
 4. Try running with `sudo` temporarily to test permissions
 
-### Buttons Not Responding
-
-1. Verify GPIO pins are correct (5, 6, 13)
-2. Check button wiring (one side to GPIO, other to GND)
-3. Test buttons manually with gpiozero
 4. Verify no other processes are using the GPIO pins
 
 ### Application Crashes on Startup
@@ -383,33 +361,42 @@ journalctl -u thermal-viewer.service -f
 
 ### Low Frame Rate
 
-1. Ensure SPI bus speed is set correctly (62.5 MHz)
+1. Ensure SPI bus speed is set correctly (50 MHz)
 2. Check CPU temperature: `vcgencmd measure_temp`
 3. Verify adequate power supply (use official Pi power adapter)
 4. Close unnecessary background processes
+5. Try using NEAREST resize (already enabled) for faster processing
 
 ## Configuration
 
-Configuration is stored in `~/.config/libseek-pi/config.json`. Key settings:
+The application uses command-line flags for configuration. No config file is needed.
 
-- `camera_type`: "seek" (CompactXR) or "seekpro" (CompactPRO)
-- `palette_index`: Color palette selection (0-7)
-- `threshold_c`: Temperature threshold in Celsius
-- `threshold_mode`: Comparison mode (">", "<", "=")
-- `auto_exposure_lock`: Lock exposure settings
-- `temperature_unit`: "C" or "F"
-- `ffc_path`: Path to flat-field calibration file
+**Command-line options:**
+- `--camera-type {seek,seekpro}` - Camera type (default: seek)
+- `--ffc-path PATH` - Path to flat-field calibration PNG file
+- `--ffc` - Enable flat-field calibration
+- `--colormap {0-21|name}` - Color palette (0=grayscale default)
+- `--flip-horizontal` - Flip display horizontally
+- `--rotate {0,90,180,270}` - Rotate display in degrees
+- `--synthetic` - Use synthetic camera for testing
+- `--lcd {waveshare,none}` - LCD display type
 
-Flat-field calibration files are stored in `~/.config/libseek-pi/ffc/`.
+**Available colormaps (0-21):**
+- 0=grayscale, 1=autumn, 2=bone, 3=jet, 4=winter, 5=rainbow
+- 6=ocean, 7=summer, 8=spring, 9=cool, 10=hsv, 11=pink, 12=hot
+- 13=parula, 14=magma, 15=inferno, 16=plasma, 17=viridis
+- 18=cividis, 19=twilight, 20=twilight_shifted, 21=turbo
+
+See `python3 -m app.app --help` for complete usage information.
 
 ## Next Steps
 
 After successful setup:
 
-1. Perform flat-field calibration (FFC mode) for best image quality
-2. Adjust temperature thresholds for your use case
-3. Experiment with different color palettes
-4. Configure autostart for headless operation
+1. Try different color palettes: `python3 -m app.app --colormap 12` (hot)
+2. Perform flat-field calibration: `python3 -m app.app --ffc --ffc-path /path/to/ffc.png`
+3. Experiment with rotation and flip options
+4. Configure autostart for headless operation (optional)
 
-See `README.md` for usage instructions and feature overview.
+See `README.md` for complete usage instructions and all available options.
 
