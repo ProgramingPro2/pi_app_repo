@@ -225,6 +225,24 @@ class ThermalApp:
                             print("WARNING: Image is completely black!")
                         else:
                             print(f"Image stats: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
+                    
+                    # For first frame, try displaying a test pattern to verify display works
+                    if frame_count == 30:
+                        print("Displaying test pattern to verify display...")
+                        test_image = Image.new('RGB', (240, 320), color=(255, 0, 0))  # Red screen
+                        try:
+                            self.display.show(test_image)
+                            import asyncio
+                            await asyncio.sleep(0.5)  # Show red for 0.5 seconds
+                            test_image = Image.new('RGB', (240, 320), color=(0, 255, 0))  # Green screen
+                            self.display.show(test_image)
+                            await asyncio.sleep(0.5)  # Show green for 0.5 seconds
+                            test_image = Image.new('RGB', (240, 320), color=(0, 0, 255))  # Blue screen
+                            self.display.show(test_image)
+                            await asyncio.sleep(0.5)  # Show blue for 0.5 seconds
+                            print("Test pattern complete - if you saw red/green/blue, display is working!")
+                        except Exception as e:
+                            print(f"Error displaying test pattern: {e}")
                 
                 try:
                     self.display.show(image)

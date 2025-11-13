@@ -25,10 +25,10 @@ This guide provides detailed instructions for setting up the Raspberry Pi therma
 - **Connection Details:**
   - SPI Port: 0
   - SPI Device: 0
-  - GPIO DC (Data/Command): GPIO 25
-  - GPIO RST (Reset): GPIO 24
-  - GPIO BL (Backlight): GPIO 18 (optional, PWM-capable, varies by model)
-  - Bus Speed: 62.5 MHz
+  - GPIO DC (Data/Command): GPIO 25 (Pin 22)
+  - GPIO RST (Reset): GPIO 27 (Pin 13)
+  - GPIO BL (Backlight): GPIO 18 (Pin 12, PWM-capable)
+  - Bus Speed: 50 MHz
 
 ### Buttons
 - **Type:** Three momentary push buttons with pull-up resistors
@@ -44,16 +44,16 @@ This guide provides detailed instructions for setting up the Raspberry Pi therma
 
 Connect the Waveshare 2.4" LCD to the Raspberry Pi SPI interface:
 
-| LCD Pin | Raspberry Pi Pin | Function |
-|---------|------------------|----------|
-| VCC | 3.3V (Pin 1) | Power |
-| GND | GND (Pin 6) | Ground |
-| DIN | GPIO 10/MOSI (Pin 19) | SPI Data |
-| CLK | GPIO 11/SCLK (Pin 23) | SPI Clock |
-| CS | GPIO 8/CE0 (Pin 24) | SPI Chip Select |
-| DC | GPIO 25 (Pin 22) | Data/Command |
-| RST | GPIO 24 (Pin 18) | Reset |
-| BL | GPIO 18 (Pin 12) | Backlight (optional, PWM-capable) |
+| LCD Pin | Raspberry Pi Pin | GPIO | Function |
+|---------|------------------|------|----------|
+| VCC | Pin 1 | - | 3.3V Power |
+| GND | Pin 6 | - | Ground |
+| DIN | Pin 19 | GPIO 10/MOSI | SPI Data |
+| CLK | Pin 23 | GPIO 11/SCLK | SPI Clock |
+| CS | Pin 24 | GPIO 8/CE0 | SPI Chip Select |
+| DC | Pin 22 | GPIO 25 | Data/Command |
+| RST | Pin 13 | GPIO 27 | Reset |
+| BL | Pin 12 | GPIO 18 | Backlight (PWM-capable) |
 
 **Note:** Verify your specific Waveshare model pinout as it may vary slightly.
 

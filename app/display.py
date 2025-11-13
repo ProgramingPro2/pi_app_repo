@@ -49,9 +49,9 @@ class Waveshare24Display:
         self,
         spi_port: int = 0,
         spi_device: int = 0,
-        gpio_dc: int = 25,
-        gpio_rst: int = 24,
-        gpio_bl: Optional[int] = None,
+        gpio_dc: int = 25,  # Pin 22
+        gpio_rst: int = 27,  # Pin 13 (Waveshare 2.4" uses GPIO 27, not 24)
+        gpio_bl: Optional[int] = 18,  # Pin 12 (GPIO 18)
         width: int = 240,
         height: int = 320,
         rotate: int = 0,
@@ -68,7 +68,7 @@ class Waveshare24Display:
                 "Note: RPi.GPIO only works on Raspberry Pi hardware."
             )
 
-        print(f"Initializing SPI display: port={spi_port}, device={spi_device}, DC={gpio_dc}, RST={gpio_rst}")
+        print(f"Initializing SPI display: port={spi_port}, device={spi_device}, DC={gpio_dc} (Pin 22), RST={gpio_rst} (Pin 13), BL={gpio_bl} (Pin 12)")
         try:
             # Valid bus speeds (MHz): 0.5, 1, 2, 4, 8, 16, 20, 24, 28, 32, 36, 40, 44, 48, 50, 52
             # Using 50 MHz (50,000,000 Hz) for good performance
@@ -91,18 +91,33 @@ class Waveshare24Display:
             print(f"Failed to create ST7789 device: {e}")
             raise
 
+        # Enable backlight (GPIO 18 = Pin 12 for Waveshare 2.4")
         if gpio_bl is not None:
             try:
                 from gpiozero import PWMLED  # type: ignore
+                try:
+                    self._backlight = PWMLED(gpio_bl)
+                    self._backlight.value = 1.0
+                    print(f"Backlight enabled on GPIO {gpio_bl} (Pin {self._gpio_to_pin(gpio_bl)})")
+                except Exception as e:
+                    print(f"Warning: Could not enable backlight on GPIO {gpio_bl}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    self._backlight = None
             except ImportError:  # pragma: no cover
-                PWMLED = None  # type: ignore
-            if PWMLED:
-                self._backlight = PWMLED(gpio_bl)
-                self._backlight.value = 1.0
-            else:
+                print("Warning: gpiozero not available for backlight control")
                 self._backlight = None
         else:
             self._backlight = None
+            print("Warning: No backlight GPIO specified - display may be dark!")
+    
+    def _gpio_to_pin(self, gpio: int) -> int:
+        """Convert GPIO number to physical pin number (for reference)"""
+        gpio_to_pin_map = {
+            18: 12, 27: 13, 25: 22, 24: 18, 23: 16, 22: 15,
+            10: 19, 11: 23, 8: 24
+        }
+        return gpio_to_pin_map.get(gpio, gpio)
 
     def show(self, image: Image.Image) -> None:
         try:
