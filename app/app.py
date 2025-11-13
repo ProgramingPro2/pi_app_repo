@@ -26,7 +26,7 @@ class AppOptions:
     lcd: str = "waveshare"
     lcd_width: int = 240
     lcd_height: int = 320
-    colormap: str = "grayscale"  # grayscale, hot, cool, rainbow, jet, viridis, plasma
+    colormap: str = "0"  # Standard OpenCV colormap number (0-21) or name
     do_ffc: bool = False  # Perform flat field calibration
 
 
