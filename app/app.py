@@ -349,7 +349,13 @@ Examples:
   # Or use name
   python -m app.app --colormap hot
 
-  # Run with FFC (flat field calibration)
+  # Capture new FFC (cover camera lens first!)
+  python -m app.app --ffc-capture
+
+  # Capture FFC and use it immediately
+  python -m app.app --ffc-capture --ffc
+
+  # Use existing FFC file
   python -m app.app --ffc --ffc-path /path/to/ffc.png
 
   # Run with rainbow colormap (5) and horizontal flip
@@ -381,7 +387,20 @@ Available colormaps (use number or name):
     parser.add_argument(
         "--ffc",
         action="store_true",
-        help="Perform flat field calibration (requires --ffc-path)"
+        help="Use flat field calibration (requires --ffc-path or --ffc-capture)"
+    )
+    
+    parser.add_argument(
+        "--ffc-capture",
+        action="store_true",
+        help="Capture a new flat field calibration (cover camera lens, then run this)"
+    )
+    
+    parser.add_argument(
+        "--ffc-output",
+        type=str,
+        default=None,
+        help="Output path for captured FFC file (default: ~/.config/libseek-pi/ffc/ffc_YYYYMMDD_HHMMSS.png)"
     )
     
     parser.add_argument(
