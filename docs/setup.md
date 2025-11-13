@@ -30,7 +30,6 @@ This guide provides detailed instructions for setting up the Raspberry Pi therma
   - GPIO BL (Backlight): GPIO 18 (Pin 12, PWM-capable)
   - Bus Speed: 50 MHz
 
-
 ## Hardware Wiring
 
 ### Display Connections (Waveshare 2.4" LCD)
@@ -50,7 +49,6 @@ Connect the Waveshare 2.4" LCD to the Raspberry Pi SPI interface:
 
 **Note:** Verify your specific Waveshare model pinout as it may vary slightly.
 
-
 ### Camera Connection
 
 - Connect the Seek Thermal camera via USB port
@@ -61,11 +59,10 @@ Connect the Waveshare 2.4" LCD to the Raspberry Pi SPI interface:
 
 ### 1. Enable Required Interfaces
 
-Enable SPI and I2C interfaces:
+Enable SPI interface:
 
 ```bash
 sudo raspi-config nonint do_spi 0
-sudo raspi-config nonint do_i2c 0
 ```
 
 Reboot the Raspberry Pi:
@@ -91,8 +88,11 @@ sudo apt install -y \
     python3-dev \
     python3-pip \
     libjpeg-dev \
-    zlib1g-dev
+    zlib1g-dev \
+    p7zip-full
 ```
+
+**Note:** `p7zip-full` is required to extract the Waveshare LCD driver archive.
 
 ### 3. Clone Repository
 
@@ -104,7 +104,21 @@ git clone <repository-url> libseek-thermal
 cd libseek-thermal/pi_app_repo
 ```
 
-### 4. Create Python Virtual Environment
+### 4. Download Waveshare LCD Driver
+
+The application uses the official Waveshare driver for reliable display operation:
+
+```bash
+# Download the driver archive
+wget https://files.waveshare.com/upload/8/8d/LCD_Module_RPI_code.7z
+
+# Extract to LCD_Module_code directory
+7z x LCD_Module_RPI_code.7z -o./LCD_Module_code
+```
+
+The driver will be automatically detected and used by the application.
+
+### 5. Create Python Virtual Environment
 
 Create and activate a virtual environment:
 
@@ -114,7 +128,7 @@ source .venv/bin/activate
 pip install --upgrade pip wheel
 ```
 
-### 5. Install Python Dependencies
+### 6. Install Python Dependencies
 
 Install required Python packages:
 
@@ -124,23 +138,7 @@ pip install numpy opencv-python pillow gpiozero luma.lcd RPi.GPIO
 
 **Note:** `RPi.GPIO` is required by `luma.lcd` for SPI display control. It only works on Raspberry Pi hardware.
 
-### 6. Pre-built Libraries (Quick Start)
-
-**If pre-built libraries are included in the repository**, you can skip compilation and proceed directly to running the application (see step 10). The `libseekshim.so` wrapper library should already be present in `native/build/`.
-
-Verify the pre-built library exists:
-
-```bash
-ls -lh native/build/libseekshim.so
-```
-
-If the file exists, you can skip to step 8 (Configure USB Permissions) or step 10 (Run Application).
-
-### 7. Build from Source (Optional)
-
-If you need to rebuild the libraries or pre-built binaries are not available, follow these steps:
-
-#### 7.1 Build libseek Library
+### 7. Build libseek Library
 
 The Python wrapper requires the base `libseek` library to be built first. If you cloned only `pi_app_repo`, you'll need the parent repository:
 
@@ -166,7 +164,7 @@ ls -lh build/src/libseek.so
 
 **Note:** The wrapper will automatically find the library in the parent directory's `build/src/` folder, so no system-wide installation is needed.
 
-#### 7.2 Build Python Wrapper Library
+### 8. Build Python Wrapper Library
 
 Now build the `libseekshim.so` wrapper library. The CMake configuration will automatically find the locally-built `libseek.so`:
 
@@ -195,7 +193,7 @@ sudo ldconfig
 
 This installs to `/usr/local/lib/` and `/usr/local/include/seek/`, but it's not required for the wrapper to work.
 
-### 8. Configure USB Permissions (Optional)
+### 9. Configure USB Permissions
 
 To allow non-root access to the Seek Thermal camera, create a udev rule:
 
@@ -225,7 +223,7 @@ sudo usermod -aG plugdev $USER
 
 **Note:** You may need to log out and back in for group changes to take effect.
 
-### 9. Test Hardware Connections
+### 10. Test Hardware Connections
 
 #### Test Display
 
@@ -237,7 +235,6 @@ lsmod | grep spi
 
 You should see `spi_bcm2835` loaded.
 
-
 #### Test Camera
 
 Verify camera is detected:
@@ -248,14 +245,14 @@ lsusb | grep -i seek
 
 You should see a device with vendor ID `289d`.
 
-### 10. Run Application Manually
+### 11. Run Application Manually
 
 Test the application before setting up autostart:
 
 ```bash
 source .venv/bin/activate
 export LD_LIBRARY_PATH=$(pwd)/native/build:$(pwd)/../build/src:$LD_LIBRARY_PATH
-python -m app.app
+python3 -m app.app
 ```
 
 **Note:** The `LD_LIBRARY_PATH` includes both the wrapper library location and the libseek library location so both can be found at runtime.
@@ -267,51 +264,69 @@ The application should:
 Press `Ctrl+C` to exit.
 
 **Example with different options:**
-```bash
-# Run with hot colormap
-python3 -m app.app --colormap 12
 
-# Run with rainbow colormap and horizontal flip
-python3 -m app.app --colormap 5 --flip-horizontal
+```bash
+# Run with rainbow colormap
+python3 -m app.app --colormap 5
+
+# Run with hot colormap and horizontal flip
+python3 -m app.app --colormap 12 --flip-horizontal
+
+# Capture flat-field calibration
+python3 -m app.app --ffc-capture
+
+# Use FFC with rainbow colormap
+python3 -m app.app --ffc --ffc-path ~/.config/libseek-pi/ffc/ffc_*.png --colormap 5
 
 # See all options
 python3 -m app.app --help
 ```
 
-### 11. Configure Autostart
+### 12. Configure Autostart
 
 Set up the application to start automatically on boot:
 
 ```bash
+# Copy service file
 sudo cp docs/thermal-viewer.service /etc/systemd/system/thermal-viewer.service
 ```
 
-Edit the service file to match your installation path:
+Edit the service file to match your installation path and desired options:
 
 ```bash
 sudo nano /etc/systemd/system/thermal-viewer.service
 ```
 
-Update paths if your installation differs from `/home/pi/libseek-thermal`:
+The default service file runs with `--colormap 5` (rainbow). Update paths if your installation differs:
 
 ```ini
 [Unit]
-Description=Seek Thermal Waveshare Viewer
-After=network-online.target
-Wants=network-online.target
+Description=Thermal Camera Viewer
+After=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/libseek-thermal/pi_app_repo
-Environment=LD_LIBRARY_PATH=/home/pi/libseek-thermal/pi_app_repo/native/build:/home/pi/libseek-thermal/build/src
-ExecStart=/home/pi/libseek-thermal/pi_app_repo/.venv/bin/python -m app.app
-Restart=on-failure
-RestartSec=5
+User=jpearce
+WorkingDirectory=/home/jpearce/pi_app_repo
+Environment="PATH=/home/jpearce/pi_app_repo/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="LD_LIBRARY_PATH=/home/jpearce/pi_app_repo/native/build:/home/jpearce/libseek-thermal/build/src"
+# Wait for USB devices to be ready and ensure camera is available
+ExecStartPre=/bin/sleep 10
+ExecStart=/home/jpearce/pi_app_repo/.venv/bin/python3 -m app.app --colormap 5
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Key settings to update:**
+- `User` - Your Raspberry Pi username (default: `jpearce` or `pi`)
+- `WorkingDirectory` - Path to `pi_app_repo` directory
+- `Environment` paths - Update to match your installation
+- `ExecStart` - Add additional flags as needed (e.g., `--ffc`, `--rotate 90`)
 
 Enable and start the service:
 
@@ -333,39 +348,191 @@ View logs:
 journalctl -u thermal-viewer.service -f
 ```
 
+**Service management commands:**
+
+```bash
+# Start service
+sudo systemctl start thermal-viewer.service
+
+# Stop service
+sudo systemctl stop thermal-viewer.service
+
+# Restart service
+sudo systemctl restart thermal-viewer.service
+
+# Disable autostart
+sudo systemctl disable thermal-viewer.service
+
+# View recent logs
+journalctl -u thermal-viewer.service -n 50
+
+# Follow logs in real-time
+journalctl -u thermal-viewer.service -f
+```
+
 ## Troubleshooting
 
 ### Display Not Showing Image
 
-1. Verify SPI is enabled: `lsmod | grep spi`
-2. Check wiring connections, especially DC and RST pins
-3. Verify display model matches ST7789 controller
-4. Check service logs for display initialization errors
+1. **Verify SPI is enabled:**
+   ```bash
+   lsmod | grep spi
+   ```
+   You should see `spi_bcm2835` loaded.
+
+2. **Check wiring connections:**
+   - Verify all pins are connected correctly
+   - Check DC (GPIO 25, Pin 22) and RST (GPIO 27, Pin 13) connections
+   - Ensure backlight (GPIO 18, Pin 12) is connected
+
+3. **Verify display model:**
+   - Ensure display uses ST7789 controller
+   - Check that Waveshare driver is extracted in `LCD_Module_code/`
+
+4. **Check service logs:**
+   ```bash
+   journalctl -u thermal-viewer.service -n 50
+   ```
+   Look for display initialization errors.
+
+5. **Test display manually:**
+   ```bash
+   source .venv/bin/activate
+   python3 -m app.app --colormap 5
+   ```
 
 ### Camera Not Detected
 
-1. Verify USB connection: `lsusb | grep 289d`
-2. Check udev rules are loaded: `sudo udevadm trigger`
-3. Verify user is in `plugdev` group: `groups`
-4. Try running with `sudo` temporarily to test permissions
+1. **Verify USB connection:**
+   ```bash
+   lsusb | grep 289d
+   ```
+   You should see a device with vendor ID `289d`.
 
-4. Verify no other processes are using the GPIO pins
+2. **Check udev rules:**
+   ```bash
+   sudo udevadm trigger
+   cat /etc/udev/rules.d/99-seekthermal.rules
+   ```
+
+3. **Verify user permissions:**
+   ```bash
+   groups
+   ```
+   You should see `plugdev` in the list.
+
+4. **Check for other processes:**
+   ```bash
+   lsof /dev/bus/usb/*/* | grep 289d
+   ```
+   If another process is using the camera, stop it first.
+
+5. **Try unplugging and replugging:**
+   - Physically disconnect and reconnect the camera
+   - Wait a few seconds for USB enumeration
 
 ### Application Crashes on Startup
 
-1. Check logs: `journalctl -u thermal-viewer.service -n 50`
-2. Verify virtual environment is activated in service file
-3. Check `LD_LIBRARY_PATH` includes the build directory
-4. Verify all Python dependencies are installed
-5. Test running manually first to see error messages
+1. **Check service logs:**
+   ```bash
+   journalctl -u thermal-viewer.service -n 50
+   ```
+
+2. **Verify virtual environment:**
+   - Ensure `.venv` exists and is activated in service file
+   - Check Python path in service file matches your installation
+
+3. **Check library paths:**
+   - Verify `LD_LIBRARY_PATH` includes both `native/build` and `../build/src`
+   - Test manually: `export LD_LIBRARY_PATH=$(pwd)/native/build:$(pwd)/../build/src:$LD_LIBRARY_PATH`
+
+4. **Verify Python dependencies:**
+   ```bash
+   source .venv/bin/activate
+   pip list | grep -E "(numpy|opencv|pillow|gpiozero|luma|RPi)"
+   ```
+
+5. **Test running manually:**
+   ```bash
+   source .venv/bin/activate
+   export LD_LIBRARY_PATH=$(pwd)/native/build:$(pwd)/../build/src:$LD_LIBRARY_PATH
+   python3 -m app.app --colormap 5
+   ```
+   This will show error messages that may not appear in service logs.
 
 ### Low Frame Rate
 
-1. Ensure SPI bus speed is set correctly (50 MHz)
-2. Check CPU temperature: `vcgencmd measure_temp`
-3. Verify adequate power supply (use official Pi power adapter)
-4. Close unnecessary background processes
-5. Try using NEAREST resize (already enabled) for faster processing
+1. **Check SPI bus speed:**
+   - Application uses 50 MHz (set in code)
+   - Verify SPI is enabled: `lsmod | grep spi`
+
+2. **Monitor CPU temperature:**
+   ```bash
+   vcgencmd measure_temp
+   ```
+   If temperature is high (>80°C), add cooling or reduce load.
+
+3. **Verify power supply:**
+   - Use official Raspberry Pi power adapter
+   - Check for low voltage warnings: `vcgencmd get_throttled`
+
+4. **Close unnecessary processes:**
+   ```bash
+   systemctl list-units --type=service --state=running
+   ```
+   Disable services you don't need.
+
+5. **Try simpler colormap:**
+   - Grayscale (0) is fastest
+   - Complex colormaps (rainbow, turbo) are slower
+
+### LIBUSB Errors
+
+**LIBUSB_ERROR_BUSY:**
+- Another process is using the camera
+- Solution: Stop other processes or wait a few seconds
+
+**LIBUSB_ERROR_PIPE:**
+- Camera needs time to initialize
+- Solution: Service has 10-second delay (`ExecStartPre=/bin/sleep 10`), but you may need to increase it
+
+**LIBUSB_ERROR_NOT_FOUND:**
+- Camera not connected or not detected
+- Solution: Check USB connection, verify with `lsusb`, reload udev rules
+
+**Segmentation fault:**
+- Usually indicates camera initialization issue
+- Solution: Ensure camera is fully connected, wait longer before starting, check service logs
+
+### Service Not Starting
+
+1. **Check service status:**
+   ```bash
+   sudo systemctl status thermal-viewer.service
+   ```
+
+2. **View detailed logs:**
+   ```bash
+   journalctl -u thermal-viewer.service -n 100 --no-pager
+   ```
+
+3. **Verify service file syntax:**
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl cat thermal-viewer.service
+   ```
+
+4. **Test ExecStart command manually:**
+   ```bash
+   cd /home/jpearce/pi_app_repo
+   source .venv/bin/activate
+   export LD_LIBRARY_PATH=$(pwd)/native/build:$(pwd)/../build/src:$LD_LIBRARY_PATH
+   /home/jpearce/pi_app_repo/.venv/bin/python3 -m app.app --colormap 5
+   ```
+
+5. **Check file permissions:**
+   - Ensure service file is readable: `sudo chmod 644 /etc/systemd/system/thermal-viewer.service`
+   - Verify user in service file has access to all paths
 
 ## Configuration
 
@@ -375,6 +542,8 @@ The application uses command-line flags for configuration. No config file is nee
 - `--camera-type {seek,seekpro}` - Camera type (default: seek)
 - `--ffc-path PATH` - Path to flat-field calibration PNG file
 - `--ffc` - Enable flat-field calibration
+- `--ffc-capture` - Capture a new flat-field calibration
+- `--ffc-output PATH` - Output path for captured FFC
 - `--colormap {0-21|name}` - Color palette (0=grayscale default)
 - `--flip-horizontal` - Flip display horizontally
 - `--rotate {0,90,180,270}` - Rotate display in degrees
@@ -393,10 +562,35 @@ See `python3 -m app.app --help` for complete usage information.
 
 After successful setup:
 
-1. Try different color palettes: `python3 -m app.app --colormap 12` (hot)
-2. Perform flat-field calibration: `python3 -m app.app --ffc --ffc-path /path/to/ffc.png`
-3. Experiment with rotation and flip options
-4. Configure autostart for headless operation (optional)
+1. **Try different color palettes:**
+   ```bash
+   python3 -m app.app --colormap 12  # Hot
+   python3 -m app.app --colormap 3   # Jet
+   python3 -m app.app --colormap 17  # Viridis
+   ```
+
+2. **Perform flat-field calibration:**
+   ```bash
+   # Cover camera lens, then:
+   python3 -m app.app --ffc-capture
+   
+   # Use the captured FFC
+   python3 -m app.app --ffc --ffc-path ~/.config/libseek-pi/ffc/ffc_*.png
+   ```
+
+3. **Experiment with rotation and flip:**
+   ```bash
+   python3 -m app.app --colormap 5 --rotate 90
+   python3 -m app.app --colormap 5 --flip-horizontal
+   ```
+
+4. **Configure autostart:**
+   - Edit service file to add your preferred options
+   - Enable service for headless operation
+
+5. **Optimize for your use case:**
+   - Adjust colormap for your application
+   - Capture FFC for better image quality
+   - Fine-tune rotation/flip for your mounting orientation
 
 See `README.md` for complete usage instructions and all available options.
-
