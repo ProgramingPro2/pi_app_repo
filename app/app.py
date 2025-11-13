@@ -161,38 +161,63 @@ class ThermalApp:
             self.shutdown()
 
     def _apply_colormap(self, gray_frame: np.ndarray) -> np.ndarray:
-        """Apply color palette to grayscale thermal image."""
+        """Apply color palette to grayscale thermal image.
+        
+        Uses standard OpenCV colormap numbers:
+        0=grayscale, 1=autumn, 2=bone, 3=jet, 4=winter, 5=rainbow, 6=ocean,
+        7=summer, 8=spring, 9=cool, 10=hsv, 11=pink, 12=hot, 13=parula,
+        14=magma, 15=inferno, 16=plasma, 17=viridis, 18=cividis, 19=twilight,
+        20=twilight_shifted, 21=turbo
+        """
         colormap = self.options.colormap.lower()
         
-        if colormap == "grayscale":
+        if colormap == "grayscale" or colormap == "0":
             # Simple grayscale - stack 3 channels
             return np.stack([gray_frame, gray_frame, gray_frame], axis=-1)
         
         # Use OpenCV colormaps if available
         try:
             import cv2
+            # Map names to standard cv2 colormap numbers
             colormap_map = {
-                "hot": cv2.COLORMAP_HOT,
-                "cool": cv2.COLORMAP_COOL,
-                "rainbow": cv2.COLORMAP_RAINBOW,
-                "jet": cv2.COLORMAP_JET,
-                "viridis": cv2.COLORMAP_VIRIDIS,
-                "plasma": cv2.COLORMAP_PLASMA,
-                "inferno": cv2.COLORMAP_INFERNO,
-                "magma": cv2.COLORMAP_MAGMA,
-                "turbo": cv2.COLORMAP_TURBO,
+                "0": 0, "grayscale": 0,
+                "1": 1, "autumn": 1,
+                "2": 2, "bone": 2,
+                "3": 3, "jet": 3,
+                "4": 4, "winter": 4,
+                "5": 5, "rainbow": 5,
+                "6": 6, "ocean": 6,
+                "7": 7, "summer": 7,
+                "8": 8, "spring": 8,
+                "9": 9, "cool": 9,
+                "10": 10, "hsv": 10,
+                "11": 11, "pink": 11,
+                "12": 12, "hot": 12,
+                "13": 13, "parula": 13,
+                "14": 14, "magma": 14,
+                "15": 15, "inferno": 15,
+                "16": 16, "plasma": 16,
+                "17": 17, "viridis": 17,
+                "18": 18, "cividis": 18,
+                "19": 19, "twilight": 19,
+                "20": 20, "twilight_shifted": 20,
+                "21": 21, "turbo": 21,
             }
             
             if colormap in colormap_map:
+                cmap_num = colormap_map[colormap]
+                if cmap_num == 0:
+                    # Grayscale
+                    return np.stack([gray_frame, gray_frame, gray_frame], axis=-1)
                 # OpenCV colormaps expect uint8 grayscale input
-                colored = cv2.applyColorMap(gray_frame, colormap_map[colormap])
+                colored = cv2.applyColorMap(gray_frame, cmap_num)
                 # Convert BGR to RGB (OpenCV uses BGR)
                 return cv2.cvtColor(colored, cv2.COLOR_BGR2RGB)
         except ImportError:
             pass
         
         # Fallback: simple grayscale if OpenCV not available or unknown colormap
-        if colormap != "grayscale":
+        if colormap != "grayscale" and colormap != "0":
             print(f"Warning: Colormap '{colormap}' not available, using grayscale")
         return np.stack([gray_frame, gray_frame, gray_frame], axis=-1)
 
@@ -217,16 +242,22 @@ Examples:
   # Run with default settings (grayscale)
   python -m app.app
 
-  # Run with hot colormap
+  # Run with hot colormap (number 12)
+  python -m app.app --colormap 12
+  # Or use name
   python -m app.app --colormap hot
 
   # Run with FFC (flat field calibration)
   python -m app.app --ffc --ffc-path /path/to/ffc.png
 
-  # Run with rainbow colormap and horizontal flip
-  python -m app.app --colormap rainbow --flip-horizontal
+  # Run with rainbow colormap (5) and horizontal flip
+  python -m app.app --colormap 5 --flip-horizontal
 
-Available colormaps: grayscale, hot, cool, rainbow, jet, viridis, plasma, inferno, magma, turbo
+Available colormaps (use number or name):
+  0/grayscale, 1/autumn, 2/bone, 3/jet, 4/winter, 5/rainbow,
+  6/ocean, 7/summer, 8/spring, 9/cool, 10/hsv, 11/pink, 12/hot,
+  13/parula, 14/magma, 15/inferno, 16/plasma, 17/viridis,
+  18/cividis, 19/twilight, 20/twilight_shifted, 21/turbo
         """
     )
     
@@ -254,9 +285,12 @@ Available colormaps: grayscale, hot, cool, rainbow, jet, viridis, plasma, infern
     parser.add_argument(
         "--colormap",
         type=str,
-        default="grayscale",
-        choices=["grayscale", "hot", "cool", "rainbow", "jet", "viridis", "plasma", "inferno", "magma", "turbo"],
-        help="Color palette to use (default: grayscale)"
+        default="0",
+        help="Color palette to use. Can be number (0-21) or name. "
+             "0=grayscale, 1=autumn, 2=bone, 3=jet, 4=winter, 5=rainbow, "
+             "6=ocean, 7=summer, 8=spring, 9=cool, 10=hsv, 11=pink, 12=hot, "
+             "13=parula, 14=magma, 15=inferno, 16=plasma, 17=viridis, "
+             "18=cividis, 19=twilight, 20=twilight_shifted, 21=turbo (default: 0)"
     )
     
     parser.add_argument(

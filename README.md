@@ -1,27 +1,21 @@
 # Raspberry Pi Thermal Viewer
 
-A real-time thermal imaging application for Raspberry Pi that displays Seek Thermal camera output on a Waveshare 2.4" SPI LCD with button-driven controls.
+A simple, fast thermal imaging application for Raspberry Pi that displays Seek Thermal camera output on a Waveshare 2.4" SPI LCD display.
 
 ## Features
 
 - **Real-time Thermal Display:** Live thermal video feed from Seek Thermal CompactXR or CompactPRO cameras
-- **Multiple Operating Modes:**
-  - Live Highlight Mode with adjustable temperature thresholds
-  - Palette Mode with multiple color map options
-  - Flat-Field Calibration (FFC) mode
-  - Hot/Cold Spot Detection mode
-  - Settings menu for configuration
-- **Temperature Units:** Switch between Celsius and Fahrenheit
-- **Button Controls:** Three-button interface for mode cycling and adjustments
-- **Autostart Support:** Systemd service for automatic startup on boot
-- **Persistent Configuration:** Settings saved between sessions
+- **Multiple Color Palettes:** 22 standard OpenCV colormaps (0-21) including grayscale, hot, rainbow, jet, viridis, plasma, and more
+- **Command-Line Interface:** Easy-to-use flags for configuration
+- **Flat-Field Calibration:** Support for FFC correction via command-line flag
+- **High Performance:** Optimized for 20-30 FPS display refresh
+- **Waveshare Driver:** Uses official Waveshare driver for reliable display operation
 
 ## Hardware Requirements
 
 - Raspberry Pi 3/4/5 running Raspberry Pi OS (Bookworm or later)
 - Seek Thermal CompactXR or CompactPRO USB camera
 - Waveshare 2.4" LCD (ST7789 controller) with SPI interface
-- Three momentary push buttons (GPIO 5, 6, 13)
 
 See [setup.md](docs/setup.md) for detailed hardware specifications and wiring instructions.
 
@@ -50,18 +44,22 @@ sudo reboot
 # Install dependencies
 sudo apt update
 sudo apt install -y libopencv-dev libusb-1.0-0-dev python3-venv python3-dev \
-    python3-pip libjpeg-dev zlib1g-dev
+    python3-pip libjpeg-dev zlib1g-dev p7zip-full
 
 # Clone repository
 cd /home/pi
 git clone <repository-url> libseek-thermal
 cd libseek-thermal/pi_app_repo
 
+# Download Waveshare LCD driver (required for display)
+sudo wget https://files.waveshare.com/upload/8/8d/LCD_Module_RPI_code.7z
+7z x LCD_Module_RPI_code.7z -o./LCD_Module_code
+
 # Create virtual environment and install Python dependencies
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip wheel
-pip install numpy opencv-python pillow gpiozero luma.lcd RPi.GPIO
+pip install numpy opencv-python pillow gpiozero RPi.GPIO
 
 # Verify pre-built library exists
 ls -lh native/build/libseekshim.so
@@ -90,13 +88,55 @@ cmake --build native/build
 
 ### 3. Run Application
 
-Manual execution:
-
+**Basic usage (grayscale):**
 ```bash
 source .venv/bin/activate
 export LD_LIBRARY_PATH=$(pwd)/native/build:$(pwd)/../build/src:$LD_LIBRARY_PATH
-python -m app.app
+python3 -m app.app
 ```
+
+**With color palette:**
+```bash
+# Use hot colormap (number 12)
+python3 -m app.app --colormap 12
+
+# Or use name
+python3 -m app.app --colormap hot
+```
+
+**With flat-field calibration:**
+```bash
+python3 -m app.app --ffc --ffc-path /path/to/ffc.png
+```
+
+**All available options:**
+```bash
+python3 -m app.app --help
+```
+
+**Available colormaps (use number or name):**
+- `0`/`grayscale` - Grayscale (default)
+- `1`/`autumn` - Autumn colors
+- `2`/`bone` - Bone colormap
+- `3`/`jet` - Jet colormap
+- `4`/`winter` - Winter colors
+- `5`/`rainbow` - Rainbow
+- `6`/`ocean` - Ocean colors
+- `7`/`summer` - Summer colors
+- `8`/`spring` - Spring colors
+- `9`/`cool` - Cool colormap
+- `10`/`hsv` - HSV colormap
+- `11`/`pink` - Pink colormap
+- `12`/`hot` - Hot colormap (red/yellow for hot spots)
+- `13`/`parula` - Parula colormap
+- `14`/`magma` - Magma colormap
+- `15`/`inferno` - Inferno colormap
+- `16`/`plasma` - Plasma colormap
+- `17`/`viridis` - Viridis colormap
+- `18`/`cividis` - Cividis colormap
+- `19`/`twilight` - Twilight colormap
+- `20`/`twilight_shifted` - Twilight shifted
+- `21`/`turbo` - Turbo colormap
 
 ### 4. Autostart Setup
 
@@ -111,106 +151,102 @@ sudo systemctl enable --now thermal-viewer.service
 
 ## Usage
 
-### Button Controls
+### Command-Line Options
 
-- **MODE Button (GPIO 5):** Cycles through operating modes (Live → Palette → FFC → Hot/Cold → Settings → Live...)
-- **UP Button (GPIO 13):** Context-sensitive increase action
-  - In Live mode: Increases temperature threshold
-  - In Palette mode: Cycles to next color palette
-  - In Settings: Moves cursor down
-- **DOWN Button (GPIO 6):** Context-sensitive decrease action
-  - In Live mode: Decreases temperature threshold
-  - In Palette mode: Cycles to previous color palette
-  - In Settings: Moves cursor up
+The application supports various command-line flags for configuration:
 
-### Operating Modes
+```bash
+python3 -m app.app [OPTIONS]
+```
 
-#### 1. Live Highlight Mode
-- Continuous thermal video display
-- Adjustable temperature threshold with UP/DOWN buttons
-- Highlights pixels matching the threshold comparator (>, <, or =)
-- Displays hotspot and coldspot temperatures
-- Threshold adjustment: ±0.5°C or ±1°F depending on unit setting
+**Options:**
+- `--camera-type {seek,seekpro}` - Camera type (default: seek)
+- `--ffc-path PATH` - Path to flat-field calibration PNG file
+- `--ffc` - Enable flat-field calibration (requires --ffc-path)
+- `--colormap {0-21|name}` - Color palette (default: 0/grayscale)
+- `--flip-horizontal` - Flip display horizontally
+- `--rotate {0,90,180,270}` - Rotate display in degrees (default: 0)
+- `--synthetic` - Use synthetic camera for testing
+- `--lcd {waveshare,none}` - LCD display type (default: waveshare)
 
-#### 2. Palette Mode
-- Live thermal video with color map selection
-- Cycle through OpenCV color palettes (GRAY, JET, INFERNO, HOT, etc.)
-- Banner displays current palette name
-- Use UP/DOWN buttons to change palettes
+**Examples:**
 
-#### 3. Flat-Field Calibration (FFC) Mode
-- Performs flat-field correction for improved image quality
-- Instructions displayed on screen
-- Cover camera lens with uniform-temperature object
-- Press UP button to begin capture (averages 60 frames)
-- Calibration file saved to `~/.config/libseek-pi/ffc/`
-- Camera automatically reloads with new calibration
+```bash
+# Default grayscale display
+python3 -m app.app
 
-#### 4. Hot/Cold Spot Mode
-- Highlights top/bottom 2% of pixels
-- Displays minimum and maximum temperatures
-- Shows temperature delta in current unit (°C or °F)
+# Hot colormap (shows red/yellow for hot spots)
+python3 -m app.app --colormap 12
+# Or: python3 -m app.app --colormap hot
 
-#### 5. Settings Menu
-Navigate with UP/DOWN, activate with MODE button:
-- **Toggle AEL:** Enable/disable auto exposure lock
-- **Units °C/°F:** Switch between Celsius and Fahrenheit
-- **Cycle Highlight:** Rotate threshold comparator (>, <, =)
-- **Reset Threshold:** Restore default temperature threshold
+# Rainbow colormap with horizontal flip
+python3 -m app.app --colormap 5 --flip-horizontal
 
-### Temperature Units
+# With flat-field calibration
+python3 -m app.app --ffc --ffc-path /path/to/ffc.png
 
-Switch between Celsius and Fahrenheit in the Settings menu. Threshold adjustments automatically adapt:
-- Celsius: ±0.5°C increments
-- Fahrenheit: ±1°F increments
+# Rotated 90 degrees with jet colormap
+python3 -m app.app --colormap 3 --rotate 90
 
-## Configuration
+# Use CompactPRO camera
+python3 -m app.app --camera-type seekpro
+```
 
-Configuration is stored in `~/.config/libseek-pi/config.json`. The application automatically:
-- Detects camera type (CompactXR or CompactPRO)
-- Loads the most recent flat-field calibration file
-- Saves settings on exit
+### Color Palettes
 
-### Configuration Options
+The application supports 22 standard OpenCV colormaps (0-21). You can use either the number or the name:
 
-- `camera_type`: "seek" (CompactXR) or "seekpro" (CompactPRO)
-- `palette_index`: Selected color palette (0-7)
-- `threshold_c`: Temperature threshold in Celsius
-- `threshold_mode`: Comparison operator (">", "<", "=")
-- `auto_exposure_lock`: Lock exposure settings
-- `temperature_unit`: "C" or "F"
-- `ffc_path`: Path to flat-field calibration PNG file
+| Number | Name | Description |
+|--------|------|-------------|
+| 0 | grayscale | Grayscale (default) |
+| 1 | autumn | Autumn colors |
+| 2 | bone | Bone colormap |
+| 3 | jet | Classic jet colormap |
+| 4 | winter | Winter colors |
+| 5 | rainbow | Rainbow spectrum |
+| 6 | ocean | Ocean colors |
+| 7 | summer | Summer colors |
+| 8 | spring | Spring colors |
+| 9 | cool | Cool colormap |
+| 10 | hsv | HSV colormap |
+| 11 | pink | Pink colormap |
+| 12 | hot | Hot colormap (red/yellow for hot) |
+| 13 | parula | Parula colormap |
+| 14 | magma | Magma colormap |
+| 15 | inferno | Inferno colormap |
+| 16 | plasma | Plasma colormap |
+| 17 | viridis | Viridis colormap |
+| 18 | cividis | Cividis colormap |
+| 19 | twilight | Twilight colormap |
+| 20 | twilight_shifted | Twilight shifted |
+| 21 | turbo | Turbo colormap |
 
 ## Project Structure
 
 ```
 pi_app_repo/
 ├── app/
-│   ├── app.py           # Main application loop
+│   ├── app.py           # Main application with command-line interface
 │   ├── camera.py        # Seek camera interface
-│   ├── display.py       # LCD display driver
-│   ├── buttons.py       # GPIO button handling
-│   ├── modes.py         # Operating mode state machine
-│   ├── processing.py    # Image processing and temperature calculations
-│   ├── overlays.py      # Text and graphics overlays
-│   └── config.py        # Configuration management
+│   ├── display.py       # LCD display driver (Waveshare + luma.lcd fallback)
+│   └── processing.py    # Image processing utilities
 ├── native/
 │   ├── CMakeLists.txt   # Build configuration
 │   ├── seek_wrapper.cpp # C++ wrapper for libseek
 │   └── build/           # Compiled library output
+├── LCD_Module_code/     # Waveshare official LCD driver
 ├── docs/
 │   ├── setup.md         # Detailed setup instructions
-│   ├── architecture.md  # System architecture documentation
-│   └── thermal-viewer.service  # Systemd service file
+│   └── thermal-viewer.service  # Systemd service file (optional)
 └── tests/               # Unit tests
 ```
 
 ## Performance
 
-- Target frame rate: 8-9 FPS
-- Frame processing: ~120ms per frame
-- Automatic frame skipping if processing exceeds target time
-- Optimized with preallocated buffers and efficient image processing
+- Target frame rate: 20-30 FPS
+- Optimized image processing pipeline
+- Fast display updates using Waveshare official driver
+- Efficient color palette application using OpenCV
 
 ## Troubleshooting
 
@@ -235,12 +271,6 @@ journalctl -u thermal-viewer.service -f
 - Check udev rules: `sudo udevadm trigger`
 - Ensure user is in `plugdev` group
 
-### Buttons Not Working
-
-- Verify GPIO pins (5, 6, 13)
-- Check button wiring (GPIO to button, button to GND)
-- Test with gpiozero manually
-
 See [docs/setup.md](docs/setup.md) for detailed troubleshooting steps.
 
 ## Development
@@ -255,6 +285,12 @@ pytest tests/
 ### Development Mode
 
 Run with synthetic camera (no hardware required):
+
+```bash
+python3 -m app.app --synthetic
+```
+
+Or in Python:
 
 ```python
 from app.app import ThermalApp, AppOptions
@@ -275,6 +311,6 @@ asyncio.run(app.run())
 ## Acknowledgments
 
 - Built on top of `libseek` for Seek Thermal camera support
-- Uses `luma.lcd` for ST7789 display driver
-- OpenCV for image processing and color mapping
+- Uses Waveshare official LCD driver for reliable display operation
+- OpenCV for image processing and standard colormaps (0-21)
 

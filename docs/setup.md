@@ -30,13 +30,6 @@ This guide provides detailed instructions for setting up the Raspberry Pi therma
   - GPIO BL (Backlight): GPIO 18 (Pin 12, PWM-capable)
   - Bus Speed: 50 MHz
 
-### Buttons
-- **Type:** Three momentary push buttons with pull-up resistors
-- **GPIO Pin Assignments:**
-  - **MODE Button:** GPIO 5 (cycles through operating modes)
-  - **DOWN Button:** GPIO 6 (decreases threshold/moves cursor up)
-  - **UP Button:** GPIO 13 (increases threshold/moves cursor down)
-- **Configuration:** All buttons use internal pull-up resistors (active LOW)
 
 ## Hardware Wiring
 
@@ -57,20 +50,6 @@ Connect the Waveshare 2.4" LCD to the Raspberry Pi SPI interface:
 
 **Note:** Verify your specific Waveshare model pinout as it may vary slightly.
 
-### Button Connections
-
-Connect three momentary push buttons:
-
-| Button | GPIO Pin | Physical Pin | Function |
-|--------|----------|--------------|----------|
-| MODE | GPIO 5 | Pin 29 | Cycle modes |
-| DOWN | GPIO 6 | Pin 31 | Decrease/Move up |
-| UP | GPIO 13 | Pin 33 | Increase/Move down |
-
-**Wiring:**
-- One terminal of each button connects to the GPIO pin
-- Other terminal connects to GND
-- Internal pull-up resistors are enabled in software (no external resistors needed)
 
 ### Camera Connection
 
