@@ -69,18 +69,30 @@ class ThermalApp:
         return NullDisplay()
 
     async def run(self) -> None:
+        frame_count = 0
         try:
             while True:
                 # Read raw frame from camera
                 frame_raw = self.camera.read_raw()
+                frame_count += 1
                 
                 # Normalize to 0-255 range
                 frame_min = frame_raw.min()
                 frame_max = frame_raw.max()
+                
+                # Debug every 30 frames
+                if frame_count % 30 == 0:
+                    print(f"Frame {frame_count}: raw min={frame_min}, max={frame_max}, shape={frame_raw.shape}")
+                
                 if frame_max > frame_min:
                     frame_normalized = ((frame_raw.astype(np.float32) - frame_min) / (frame_max - frame_min) * 255).astype(np.uint8)
                 else:
+                    print(f"WARNING: Frame {frame_count} has no range (min==max={frame_min})")
                     frame_normalized = np.zeros_like(frame_raw, dtype=np.uint8)
+                
+                # Check if normalized frame is all white
+                if frame_normalized.max() == 255 and frame_normalized.min() == 255:
+                    print(f"WARNING: Frame {frame_count} normalized to all white!")
                 
                 # Convert to RGB (grayscale thermal image)
                 frame_rgb = np.stack([frame_normalized] * 3, axis=-1)
@@ -88,17 +100,35 @@ class ThermalApp:
                 # Create PIL image
                 image = Image.fromarray(frame_rgb, mode='RGB')
                 
+                # Check image before resize
+                if frame_count % 30 == 0:
+                    img_array = np.array(image)
+                    print(f"PIL image: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
+                
                 # Resize to display size
                 image = image.resize((self.options.lcd_width, self.options.lcd_height), Image.BILINEAR)
+                
+                # Check image after resize
+                if frame_count % 30 == 0:
+                    img_array = np.array(image)
+                    if (img_array == 255).all():
+                        print(f"WARNING: Image is all white after resize!")
+                    print(f"Resized image: min={img_array.min()}, max={img_array.max()}, mean={img_array.mean():.1f}")
                 
                 # Apply flip if needed
                 if self.options.display_flip_horizontal:
                     image = image.transpose(Image.FLIP_LEFT_RIGHT)
                 
                 # Display
-                self.display.show(image)
+                try:
+                    self.display.show(image)
+                except Exception as e:
+                    print(f"Error displaying frame {frame_count}: {e}")
+                    import traceback
+                    traceback.print_exc()
                 
-                await asyncio.sleep(0)
+                # Small delay to prevent overwhelming the display
+                await asyncio.sleep(0.1)  # ~10 FPS
         finally:
             self.shutdown()
 
