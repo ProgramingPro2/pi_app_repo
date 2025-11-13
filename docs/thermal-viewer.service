@@ -8,11 +8,11 @@ User=jpearce
 WorkingDirectory=/home/jpearce/pi_app_repo
 Environment="PATH=/home/jpearce/pi_app_repo/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="LD_LIBRARY_PATH=/home/jpearce/pi_app_repo/native/build:/home/jpearce/libseek-thermal/build/src"
-# Wait a bit for USB devices to be ready
-ExecStartPre=/bin/sleep 5
+# Wait for USB devices to be ready and ensure camera is available
+ExecStartPre=/bin/sleep 10
 ExecStart=/home/jpearce/pi_app_repo/.venv/bin/python3 -m app.app --colormap 5
 Restart=always
-RestartSec=10
+RestartSec=15
 StandardOutput=journal
 StandardError=journal
 
