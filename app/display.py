@@ -170,7 +170,8 @@ class Waveshare24Display:
             else:
                 self._frame_count = 1
             
-            if self._frame_count <= 5 or self._frame_count % 60 == 0:
+            # Reduced debug output for performance (only first frame and every 120 frames)
+            if self._frame_count <= 1 or self._frame_count % 120 == 0:
                 import numpy as np
                 img_array = np.array(rgb_image)
                 print(f"Display.show() frame {self._frame_count}: size={rgb_image.size}, mode={rgb_image.mode}, "
