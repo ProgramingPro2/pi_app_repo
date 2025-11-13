@@ -144,14 +144,16 @@ def render_overlay(
         points = np.argwhere(highlight_mask)
         if points.size:
             color = highlight_color or (255, 255, 0)
-            # Sample to avoid overdrawing while keeping coverage.
-            step = max(1, len(points) // 1500)
+            # Sample more aggressively to avoid stripes and overdrawing
+            # Use fewer points for smoother highlight
+            step = max(1, len(points) // 800)  # Reduced from 1500 to 800 for better coverage
+            # Use smaller highlight dots
             for y, x in points[::step]:
-                x0, y0 = int(x) - 1, int(y) - 1
-                x1, y1 = int(x) + 1, int(y) + 1
+                x0, y0 = max(0, int(x) - 1), max(0, int(y) - 1)
+                x1, y1 = min(width, int(x) + 1), min(height, int(y) + 1)
                 overlay_draw.rectangle(
                     (x0, y0, x1, y1),
-                    fill=(color[0], color[1], color[2], 160),
+                    fill=(color[0], color[1], color[2], 120),  # Reduced opacity from 160 to 120
                 )
         image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
         draw = ImageDraw.Draw(image)
@@ -162,12 +164,15 @@ def render_overlay(
             draw.text((x, y), text, fill=(255, 255, 255), font=_FONT_SMALL)
 
     if status_lines:
-        padding = 6
-        line_spacing = 2
+        # Use smaller font and padding for compact overlay
+        padding = 3
+        line_spacing = 1
         line_metrics = []
         max_width = 0
+        # Use small font for status text
+        status_font = _FONT_SMALL
         for line in status_lines:
-            bbox = draw.textbbox((0, 0), line, font=_FONT_MAIN)
+            bbox = draw.textbbox((0, 0), line, font=status_font)
             width_line = bbox[2] - bbox[0]
             height_line = bbox[3] - bbox[1]
             line_metrics.append((line, width_line, height_line))
@@ -176,11 +181,16 @@ def render_overlay(
         total_height = sum(h for _, _, h in line_metrics) + line_spacing * (len(line_metrics) - 1)
         x0 = width - max_width - padding * 2
         y0 = height - total_height - padding * 2
-        draw.rectangle((x0, y0, width, height), fill=(0, 0, 0, 160))
+        # Semi-transparent black background
+        overlay_bg = Image.new("RGBA", image.size, (0, 0, 0, 180))
+        overlay_draw = ImageDraw.Draw(overlay_bg)
+        overlay_draw.rectangle((x0, y0, width, height), fill=(0, 0, 0, 200))
+        image = Image.alpha_composite(image.convert("RGBA"), overlay_bg).convert("RGB")
+        draw = ImageDraw.Draw(image)
 
         cursor_y = y0 + padding
         for line, line_w, line_h in line_metrics:
-            draw.text((width - max_width - padding, cursor_y), line, fill=(255, 255, 255), font=_FONT_MAIN)
+            draw.text((width - max_width - padding, cursor_y), line, fill=(255, 255, 255), font=status_font)
             cursor_y += line_h + line_spacing
 
     return image

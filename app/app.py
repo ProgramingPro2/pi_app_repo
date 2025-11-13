@@ -35,6 +35,7 @@ class AppOptions:
     use_synthetic: bool = False
     palette_index: int = 2
     display_rotate: int = 0
+    display_flip_horizontal: bool = True  # Flip to fix mirrored display
     lcd: str = "waveshare"
     lcd_width: int = 240
     lcd_height: int = 320
@@ -213,6 +214,12 @@ class ThermalApp:
                     highlight_color=mode_result.highlight_color,
                 )
                 image = self._resize_for_display(image)
+                # Apply rotation if needed
+                if self.options.display_rotate != 0:
+                    image = image.rotate(self.options.display_rotate, expand=False)
+                # Flip horizontally if display is mirrored (default: True to fix common issue)
+                if self.options.display_flip_horizontal:
+                    image = image.transpose(Image.FLIP_LEFT_RIGHT)
                 
                 # Debug: Print image info every 30 frames
                 if frame_count % 30 == 0:
