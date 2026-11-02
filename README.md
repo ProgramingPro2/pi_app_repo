@@ -401,7 +401,7 @@ See [docs/setup.md](docs/setup.md) for detailed build instructions.
 
 ## License
 
-[Add license information here]
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Contributing
 
